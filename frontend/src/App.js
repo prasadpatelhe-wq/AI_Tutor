@@ -1,5 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useContext, useEffect, useState } from "react";
+
 import axios from 'axios';
+import FlashcardView from "./FlashcardView"; // or "./components/FlashcardView" if you made a folder
+
+import { SyllabusContext } from "./SyllabusContext";
+
+import SyllabusUploader from "./SyllabusUploader";
+
+
+
 
 // API Configuration
 const API_BASE_URL = 'http://localhost:8000';
@@ -629,6 +638,11 @@ const App = () => {
   const [videoCompletionMsg, setVideoCompletionMsg] = useState('');
   const [attentionStatus, setAttentionStatus] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
+  const [flashcards, setFlashcards] = useState([]);
+  const [loadingFlashcards, setLoadingFlashcards] = useState(false);
+  const { syllabus, currentChapter, nextChapter } = useContext(SyllabusContext);
+
+  
   
   // Loading States
   const [loading, setLoading] = useState({
@@ -757,22 +771,38 @@ const App = () => {
   const generateQuiz = async (subject, grade) => {
     setLoading(prev => ({ ...prev, quiz: true }));
     try {
-      const response = await api.post('/generate_quiz', { 
+      const chapter = currentChapter || {
+        id: "ch1",
+        title: `${subject} Basics`,
+        summary: `Basic ${subject} concepts.`,
+      };
+  
+      const response = await api.post("/generate_quiz", {
         subject,
-        grade: grade || userGrade
+        grade_band: grade || userGrade,
+        chapter_id: chapter.id,
+        chapter_title: chapter.title,
+        chapter_summary: chapter.summary,
+        num_questions: 5,
+        difficulty: "basic",
       });
-      return response.data.questions;
+  
+      console.log("✅ Quiz generated for:", chapter.title);
+      console.log("Backend response:", response.data); // 👈 added back
+  
+      const quizArray = response.data.basic || [];
+      const quizData = quizArray.length > 0 ? quizArray[0].questions : [];
+  
+      nextChapter(); // 👈 keep auto-advance
+      return quizData;
     } catch (error) {
-      console.error('Generate quiz error:', error);
-      // Fallback mock data
-      return [
-        { question: 'What is 2+2?', options: ['3', '4', '5', '6'], correct: 1 },
-        { question: 'What is the capital of France?', options: ['London', 'Berlin', 'Paris', 'Madrid'], correct: 2 },
-      ];
+      console.error("Generate quiz error:", error);
+      return [];
     } finally {
       setLoading(prev => ({ ...prev, quiz: false }));
     }
   };
+  
 
   const calculateQuizScore = async (answers, questions) => {
     try {
@@ -963,7 +993,7 @@ const App = () => {
     setQuizContainerVisible(true);
     setCurrentQuestionIndex(0);
     setCurrentQuestion(`Question 1: ${questions[0].question}`);
-    setAnswerOptions(questions[0].options);
+    setAnswerOptions(questions[0]?.options || []);
     setQuizProgress(`Progress: 0/${questions.length}`);
   };
 
@@ -976,7 +1006,7 @@ const App = () => {
     if (currentQuestionIndex < quizQuestions.length - 1) {
       const nextIndex = currentQuestionIndex + 1;
       setCurrentQuestionIndex(nextIndex);
-      setCurrentQuestion(`Question ${nextIndex + 1}: ${quizQuestions[nextIndex].question}`);
+      setCurrentQuestion(`Question ${nextIndex + 1}: ${quizQuestions[nextIndex].question_text}`);
       setAnswerOptions(quizQuestions[nextIndex].options);
       setQuizProgress(`Progress: ${nextIndex}/${quizQuestions.length}`);
     } else {
@@ -1083,6 +1113,9 @@ const App = () => {
         </div>
       )}
 
+
+
+
       {currentScreen === 'main' && (
         <div>
           <div className="header-section">
@@ -1110,6 +1143,10 @@ const App = () => {
             <button className={`tab-nav ${activeTab === 'parent' ? 'active' : ''}`} onClick={() => setActiveTab('parent')}>
               👨‍👩‍👧‍👦 Parent Zone
             </button>
+            <button className={`tab-nav ${activeTab === 'flashcards' ? 'active' : ''}`} onClick={() => setActiveTab('flashcards')}>
+             🃏 Flashcards
+            </button>
+
           </div>
 
           {activeTab === 'home' && (
@@ -1237,19 +1274,23 @@ const App = () => {
                 <div className="kid-card">
                   <h4 style={{ color: '#667eea', marginBottom: '20px' }}>{currentQuestion}</h4>
                   <div style={{ display: 'grid', gap: '15px', marginBottom: '20px' }}>
-                    {answerOptions.map((opt, i) => (
-                      <button 
-                        key={i} 
-                        className="quiz-card" 
-                        onClick={() => handleQuizAnswer(i)}
-                        style={{ 
-                          backgroundColor: quizAnswers[currentQuestionIndex] === i ? 'rgba(102, 126, 234, 0.2)' : undefined 
+                    {Array.isArray(answerOptions) && answerOptions.length > 0 ? (
+                      answerOptions.map((opt, i) => (
+                        <button
+                          key={i}
+                          className="quiz-card"
+                          onClick={() => handleQuizAnswer(i)}
+                          style={{
+                            backgroundColor: quizAnswers[currentQuestionIndex] === i ? 'rgba(102, 126, 234, 0.2)' : undefined
                         }}
                       >
                         <span style={{ fontWeight: '600', color: '#667eea', marginRight: '10px' }}>{String.fromCharCode(65 + i)}.</span>
                         {opt}
                       </button>
-                    ))}
+                    ))
+                  ) : (
+                     <p style={{ color: '#999'}}>Loading options...</p>
+                  )}
                   </div>
                   <div style={{ textAlign: 'center', marginBottom: '20px' }}>
                     <p style={{ fontSize: '16px', fontWeight: '600', color: '#667eea' }}>{quizProgress}</p>
@@ -1263,7 +1304,7 @@ const App = () => {
                   )}
                 </div>
               )}
-              
+
               {quizResults && (
                 <div className="kid-card" style={{ textAlign: 'center', background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1))' }}>
                   <h4 style={{ color: '#667eea', marginBottom: '15px' }}>🎉 Quiz Results!</h4>
@@ -1272,6 +1313,12 @@ const App = () => {
               )}
             </div>
           )}
+
+          {activeTab === 'flashcards' && <FlashcardView />}
+          
+          <SyllabusUploader />
+
+
 
           {activeTab === 'rewards' && (
             <div className="content-section">

@@ -100,7 +100,7 @@ celerybeat.pid
 *.sage.py
 
 # Environments
-.env
+../.env
 .venv
 env/
 venv/
@@ -140,4 +140,4 @@ cython_debug/
 /data/syllabi/*
 !/data/syllabi/.gitkeep
 
-.env
+../.env

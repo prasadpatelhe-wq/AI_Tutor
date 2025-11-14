@@ -2,14 +2,43 @@
 API backend for the Agentic AI Tutor, replacing the Gradio UI.
 This exposes the core functionality via REST endpoints for a React frontend.
 """
+import sys, os
 
+# === Fix Python path issues ===
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))           # backend/
+ROOT_DIR = os.path.dirname(BASE_DIR)                            # project root
+SRC_DIR = os.path.join(BASE_DIR, "src")                         # backend/src/
+
+for path in [ROOT_DIR, BASE_DIR, SRC_DIR]:
+    if path not in sys.path:
+        sys.path.append(path)
+
+from backend.database import SessionLocal
+from backend.services.flashcard_service import save_flashcards_from_quiz, get_flashcards
+
+# -----------------------------------------------------------
+# Flashcard Endpoints
+# -----------------------------------------------------------
+
+from backend.services.progress_service import update_progress, get_due_flashcards
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import random
 from datetime import datetime
-
+from src.tutor.interface import tutor_interface as AI_TUTOR
 from src.tutor.interface import tutor_interface
+from backend.database import SessionLocal
+from backend.routes.flashcards_router import router as flashcards_router
+import sys, os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from backend.routes.syllabus_router import router as syllabus_router
+
+import logging
+
+logger = logging.getLogger(__name__)
+app = FastAPI(title="Euri AI Tutor API", version="2.0")
 
 # Game state management
 class GameState:
@@ -24,11 +53,11 @@ class GameState:
         self.daily_progress = {"videos": 0, "quizzes": 0, "study_time": 0}
         self.attention_score = 100
         self.parent_authenticated = False
-        
+
     def add_coins(self, amount):
         self.coins += amount
         self.total_coins_earned += amount
-        
+
     def spend_coins(self, amount):
         if self.coins >= amount:
             self.coins -= amount
@@ -88,7 +117,16 @@ class VideoRequest(BaseModel):
 
 class QuizRequest(BaseModel):
     subject: str
-    grade: str
+    grade_band: str
+    chapter_id: str
+    chapter_title: str
+    chapter_summary: str
+    num_questions: int = 5
+    difficulty: str = "basic"
+
+class FlashcardFetchRequest(BaseModel):
+    subject: str
+    chapter: str
 
 class QuizScoreRequest(BaseModel):
     answers: list[int]
@@ -107,8 +145,14 @@ class ChatRequest(BaseModel):
     subject: str
     grade: str
 
+class ProgressRequest(BaseModel):
+    student_id: int
+    flashcard_id: int
+    correct: bool
+
 # FastAPI app
-app = FastAPI(title="Agentic AI Tutor API")
+app.include_router(flashcards_router)
+app.include_router(syllabus_router)
 
 # CORS middleware for React frontend
 app.add_middleware(
@@ -118,6 +162,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(flashcards_router)
+
 
 @app.get("/health")
 def health_check():
@@ -146,7 +193,7 @@ def api_get_video_for_subject(subject: str):
 def api_simulate_attention_check():
     attention_level = random.randint(60, 100)
     game_state.attention_score = attention_level
-    
+
     if attention_level < 80:
         questions = [
             "Hey there! 👋 What was the last thing you learned?",
@@ -156,7 +203,7 @@ def api_simulate_attention_check():
         ]
         return {
             "needs_check": True,
-            "socratic_question": random.choice(questions), 
+            "socratic_question": random.choice(questions),
             "attention_level": attention_level
         }
     return {
@@ -173,19 +220,67 @@ def api_complete_video_watching(req: VideoRequest):
     game_state.daily_progress["videos"] += 1
     return {"message": f"🎉 Great job! You earned {coins_earned} coins for watching the video! 🎉", "coins_earned": coins_earned, "coins": game_state.coins}
 
+
+from backend.database import SessionLocal
+from backend.services.flashcard_service import save_flashcards_from_quiz
+
 @app.post("/generate_quiz")
-def api_generate_quiz(req: QuizRequest):
-    if not req.subject or not req.grade:
-        raise HTTPException(status_code=400, detail="Subject and grade are required")
-    questions = tutor_interface.generate_quiz(grade=req.grade, subject=req.subject, num_questions=5)
-    return {"questions": questions or []}
+def generate_quiz(request: QuizRequest, student_id: int = None):
+    """
+    Generates quizzes for basic, medium, and hard difficulty levels.
+    Automatically saves flashcards (question + explanation) into the database.
+    """
+    db = SessionLocal()
+    try:
+        # ✅ Step 1: If student_id provided, validate or override grade_band
+        if student_id:
+            from backend.models.students import Student
+            student = db.query(Student).filter(Student.id == student_id).first()
+            if not student:
+                raise HTTPException(status_code=404, detail="Student not found")
+
+            # ⚠️ Check for grade mismatch
+            if student.grade_band != request.grade_band:
+                print(f"⚠️ Grade mismatch for student {student_id}: "
+                      f"Request grade='{request.grade_band}', DB grade='{student.grade_band}'. Using DB grade.")
+                request.grade_band = student.grade_band  # Correct to student's actual grade
+
+        # ✅ Step 2: Generate quiz using AI_TUTOR
+        result = AI_TUTOR.generate_all_quizzes(
+            subject=request.subject,
+            grade_band=request.grade_band,
+            chapter_id=request.chapter_id,
+            chapter_title=request.chapter_title,
+            chapter_summary=request.chapter_summary,
+        )
+
+        # ✅ Step 3: Auto-save flashcards for each difficulty level
+        for difficulty_level, quizzes in result.items():
+            for quiz in quizzes:
+                save_flashcards_from_quiz(
+                    quiz_data=quiz,
+                    subject_name=request.subject,
+                    chapter_title=request.chapter_title,
+                    db=db,
+                    student_id=student_id  # store which student generated it
+                )
+
+        # ✅ Step 4: Return quiz data (for frontend)
+        return result
+
+    except Exception as e:
+        logger.error(f"Quiz generation error: {e}")
+        raise HTTPException(status_code=500, detail=f"Error generating quiz: {e}")
+
+    finally:
+        db.close()
 
 @app.post("/calculate_quiz_score")
 def api_calculate_quiz_score(req: QuizScoreRequest):
     correct = sum(1 for a, c in zip(req.answers, req.correct_answers) if a == c)
     total = len(req.correct_answers)
     percentage = (correct / total) * 100 if total > 0 else 0
-    
+
     if percentage >= 80:
         coins = 50
         emoji = "🎉"
@@ -202,11 +297,11 @@ def api_calculate_quiz_score(req: QuizScoreRequest):
         coins = 10
         emoji = "💪"
         message = "Keep practicing! You'll get better!"
-    
+
     game_state.add_coins(coins)
     game_state.quizzes_completed += 1
     game_state.daily_progress["quizzes"] += 1
-    
+
     return {
         "score": f"{correct}/{total}",
         "percentage": percentage,
@@ -253,7 +348,7 @@ def api_get_leaderboard():
 def api_get_parent_dashboard():
     if not game_state.parent_authenticated:
         raise HTTPException(status_code=403, detail="🔒 Please log in as parent first!")
-    
+
     dashboard = f"""
     👨‍👩‍👧‍👦 **Parent Dashboard** 👨‍👩‍👧‍👦
     
@@ -284,7 +379,7 @@ def api_generate_roadmap(req: RoadmapRequest):
         raise HTTPException(status_code=503, detail="The AI Tutor is not ready. Please check the setup.")
     if not all([req.grade, req.board, req.subject]):
         raise HTTPException(status_code=400, detail="Please select a grade, board, and subject to create a roadmap.")
-    
+
     roadmap = tutor_interface.generate_learning_roadmap(req.grade, req.board, req.subject)
     return {"roadmap": roadmap}
 
@@ -292,7 +387,7 @@ def api_generate_roadmap(req: RoadmapRequest):
 def api_chat_with_tutor(req: ChatRequest):
     if not tutor_ready:
         return {"response": "The AI Tutor is currently offline. Please try again later."}
-    
+
     try:
         bot_response = tutor_interface.chat_with_tutor(req.message, req.subject, req.grade)
         return {"response": bot_response}
@@ -303,10 +398,10 @@ def api_chat_with_tutor(req: ChatRequest):
             "hi": f"Hi there! Ready to explore {req.subject}? What would you like to learn? 📚",
             "help": f"I'm here to help you with {req.subject}! You can ask me questions about concepts, problems, or explanations. What specific topic interests you?",
         }
-        
-        response = fallback_responses.get(req.message.lower().strip(), 
+
+        response = fallback_responses.get(req.message.lower().strip(),
             f"I understand you're asking about '{req.message}' in {req.subject}. While I'm having some connection issues with the advanced AI right now, I can still help! Could you be more specific about what you'd like to learn? 🎓")
-        
+
         return {"response": response}
 
 # Add more endpoints if needed (e.g., for daily progress reset, etc.)
@@ -314,4 +409,5 @@ def api_chat_with_tutor(req: ChatRequest):
 if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting AI Tutor API...")
-    uvicorn.run("api:app", host="localhost", port=8000, reload=False)
+    uvicorn.run("backend.api:app", host="127.0.0.1", port=8000, reload=False)
+
