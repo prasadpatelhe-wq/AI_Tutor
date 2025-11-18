@@ -23,6 +23,7 @@ from backend.services.flashcard_service import save_flashcards_from_quiz, get_fl
 from backend.services.progress_service import update_progress, get_due_flashcards
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+
 from pydantic import BaseModel
 import random
 from datetime import datetime
@@ -32,9 +33,9 @@ from backend.database import SessionLocal
 from backend.routes.flashcards_router import router as flashcards_router
 import sys, os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from backend.routes.syllabus_router import router as syllabus_router
-
+from backend.routes.subjects_router import router as subjects_router
+from backend.routes.chapters_router import router as chapters_router
+from backend.routes.meta_router import router as meta_router
 import logging
 
 logger = logging.getLogger(__name__)
@@ -118,7 +119,7 @@ class VideoRequest(BaseModel):
 class QuizRequest(BaseModel):
     subject: str
     grade_band: str
-    chapter_id: str
+    chapter_id: int
     chapter_title: str
     chapter_summary: str
     num_questions: int = 5
@@ -152,8 +153,9 @@ class ProgressRequest(BaseModel):
 
 # FastAPI app
 app.include_router(flashcards_router)
-app.include_router(syllabus_router)
-
+app.include_router(chapters_router)
+app.include_router(subjects_router)
+app.include_router(meta_router)
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,

@@ -1,12 +1,22 @@
-from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, func
 from backend.database import Base
+from sqlalchemy import Column, Integer, String, ForeignKey, Text
+from sqlalchemy.orm import relationship
 
 class Quiz(Base):
-    __tablename__ = "quizzes"
+    __tablename__ = "quiz"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
+
     subject_id = Column(Integer, ForeignKey("subjects.id"))
+    grade_band = Column(String(50))
+
     chapter_id = Column(Integer, ForeignKey("chapters.id"))
-    grade_band = Column(String(50), nullable=False)
-    difficulty = Column(String(20), nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
+    difficulty = Column(String(50))
+
+    subject = relationship("Subject")
+
+    # FIXED: MUST match "quizzes" in chapter.py
+    chapter = relationship("Chapter", back_populates="quizzes")
+
+    questions = relationship("Question", back_populates="quiz")
+    roadmap_links = relationship("RoadmapQuizMap", back_populates="quiz")

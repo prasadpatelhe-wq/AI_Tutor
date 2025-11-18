@@ -8,6 +8,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
+from backend.models.flashcard import Flashcard
 
 # --- Dynamically fix import paths ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))        # backend/routes/
@@ -174,3 +175,26 @@ def api_get_due_flashcards(student_id: int):
         return {"count": len(cards), "due_flashcards": cards}
     finally:
         db.close()
+
+@router.get("/chapter/{student_id}/{chapter_id}")
+def get_flashcards_by_chapter(student_id: int, chapter_id: int, db: Session = Depends(get_db)):
+    flashcards = (
+        db.query(Flashcard)
+        .filter(
+            Flashcard.student_id == student_id,
+            Flashcard.chapter_id == chapter_id
+        )
+        .all()
+    )
+
+    return [
+        {
+            "id": f.id,
+            "question": f.question_text,
+            "answer": f.correct_option,
+            "explanation": f.explanation,
+            "difficulty": f.difficulty,
+            "created_at": f.created_at
+        }
+        for f in flashcards
+    ]

@@ -5,6 +5,9 @@ export const SyllabusContext = createContext();
 export const SyllabusProvider = ({ children }) => {
   const [syllabus, setSyllabus] = useState(null);
   const [currentChapterIndex, setCurrentChapterIndex] = useState(0);
+  const [dbChapters, setDbChapters] = useState([]);
+  const [selectedDbChapter, setSelectedDbChapter] = useState(null);
+
 
   // ✅ Now this only loads syllabus *data*, not upload again
   const loadSyllabus = (data) => {
@@ -13,6 +16,15 @@ export const SyllabusProvider = ({ children }) => {
     localStorage.setItem("syllabus", JSON.stringify(data));
     localStorage.setItem("chapterIndex", "0");
   };
+
+  const fetchChaptersFromDB = async (subjectId) => {
+    const res = await fetch(`http://localhost:8000/chapters/by_subject/${subjectId}`);
+    const data = await res.json();
+  
+    setDbChapters(data);
+    setSelectedDbChapter(null);
+  };
+  
 
   // 🔁 Move to next chapter
   const nextChapter = () => {
@@ -38,7 +50,17 @@ export const SyllabusProvider = ({ children }) => {
 
   return (
     <SyllabusContext.Provider
-      value={{ syllabus, currentChapter, nextChapter, loadSyllabus }}
+    value={{
+      syllabus,
+      currentChapter,
+      nextChapter,
+      loadSyllabus,
+      fetchChaptersFromDB,
+      dbChapters,
+      selectedDbChapter,
+      setSelectedDbChapter
+    }}
+    
     >
       {children}
     </SyllabusContext.Provider>

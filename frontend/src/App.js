@@ -7,6 +7,8 @@ import { SyllabusContext } from "./SyllabusContext";
 
 import SyllabusUploader from "./SyllabusUploader";
 
+import { fetchGrades, fetchBoards, fetchSubjects } from "./meta";
+
 
 
 
@@ -617,6 +619,7 @@ const App = () => {
   const [userGrade, setUserGrade] = useState('');
   const [userBoard, setUserBoard] = useState('');
   const [userSubject, setUserSubject] = useState('');
+  const [userSubjectId, setUserSubjectId] = useState(null);
   const [activeTab, setActiveTab] = useState('home');
   const [chatHistory, setChatHistory] = useState([]);
   const [chatMessage, setChatMessage] = useState('');
@@ -640,8 +643,42 @@ const App = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [flashcards, setFlashcards] = useState([]);
   const [loadingFlashcards, setLoadingFlashcards] = useState(false);
-  const { syllabus, currentChapter, nextChapter } = useContext(SyllabusContext);
+  const [grades, setGrades] = useState([]);
+  const [boards, setBoards] = useState([]);
+  const [subjects, setSubjects] = useState([]);
 
+  const {
+    syllabus,
+    currentChapter,
+    nextChapter,
+    loadSyllabus,
+    fetchChaptersFromDB,   
+    dbChapters,
+    selectedDbChapter,
+    setSelectedDbChapter
+  } = useContext(SyllabusContext);
+  
+   // --- Add the useEffect HERE --- Front page subject, grade, board loder
+
+  useEffect(() => {
+    const loadDropdowns = async () => {
+      try {
+        const [g, b, s] = await Promise.all([
+          fetchGrades(),
+          fetchBoards(),
+          fetchSubjects(),
+        ]);
+
+        setGrades(g.data);
+        setBoards(b.data);
+        setSubjects(s.data);
+      } catch (err) {
+        console.error("Failed loading dropdowns:", err);
+      }
+    };
+
+    loadDropdowns();
+  }, []);
   
   
   // Loading States
@@ -767,34 +804,41 @@ const App = () => {
       setVideoCompletionMsg('🎉 Great job! Video completed!');
     }
   };
-
-  const generateQuiz = async (subject, grade) => {
+  const generateQuiz = async () => {
     setLoading(prev => ({ ...prev, quiz: true }));
-    try {
-      const chapter = currentChapter || {
-        id: "ch1",
-        title: `${subject} Basics`,
-        summary: `Basic ${subject} concepts.`,
-      };
   
+    try {
+      if (!selectedDbChapter) {
+        console.error("❌ No chapter selected!");
+        return [];
+      }
+  
+      // 1️⃣ Fetch chapter details
+      const chapterResponse = await api.get(`/chapters/${selectedDbChapter}`);
+      const chapter = chapterResponse.data;
+  
+      // 2️⃣ Call backend
       const response = await api.post("/generate_quiz", {
-        subject,
-        grade_band: grade || userGrade,
-        chapter_id: chapter.id,
-        chapter_title: chapter.title,
-        chapter_summary: chapter.summary,
+        subject: userSubject,
+        grade_band: userGrade,
+        chapter_id: String(chapter.id),     // FIXED
+        chapter_title: chapter.title || "", // SAFE
+        chapter_summary: chapter.summary || chapter.description || "", // FIX
         num_questions: 5,
         difficulty: "basic",
       });
   
-      console.log("✅ Quiz generated for:", chapter.title);
-      console.log("Backend response:", response.data); // 👈 added back
+      console.log("🔥 Backend quiz response:", response.data);
+
+      // 3️⃣ Validate response
+      if (!response.data.basic || !Array.isArray(response.data.basic)) {
+        console.error("❌ Invalid quiz format:", response.data);
+        return [];
+      }
   
-      const quizArray = response.data.basic || [];
-      const quizData = quizArray.length > 0 ? quizArray[0].questions : [];
+      const quizArray = response.data.basic;
+      return quizArray[0]?.questions || [];  // SAFE ACCESS
   
-      nextChapter(); // 👈 keep auto-advance
-      return quizData;
     } catch (error) {
       console.error("Generate quiz error:", error);
       return [];
@@ -803,7 +847,32 @@ const App = () => {
     }
   };
   
+  const handleSubjectChange = (event) => {
+    const subjectId = event.target.value || null;
+    setUserSubjectId(subjectId);
 
+    const selected = subjects.find(
+      (subject) => String(subject.id) === String(subjectId)
+    );
+    setUserSubject(selected?.name || "");
+  };
+
+  const setupLearning = async () => {
+    if (!userGrade || !userBoard || !userSubjectId || !userSubject) {
+      setSelectionStatus("❌ Please select all options!");
+      return;
+    }
+
+    try {
+      await fetchChaptersFromDB(userSubjectId);
+      setCurrentScreen("selectChapter");
+    } catch (error) {
+      console.error("Setup error:", error);
+      setSelectionStatus("❌ Something went wrong while setting up learning.");
+    }
+  };
+  
+   
   const calculateQuizScore = async (answers, questions) => {
     try {
       const correctAnswers = questions.map(q => q.correct);
@@ -951,15 +1020,7 @@ const App = () => {
     await verifyParentPin(parentPin);
   };
 
-  const setupLearning = () => {
-    if (userGrade && userBoard && userSubject) {
-      setSelectionStatus('✅ Great! Let\'s start learning!');
-      setCurrentScreen('main');
-    } else {
-      setSelectionStatus('❌ Please select all options!');
-    }
-  };
-
+ 
   const loadVideoForSubject = async () => {
     const video = await getVideoForSubject(userSubject);
     setVideoTitle(`Now Playing: ${video.title}`);
@@ -1062,58 +1123,86 @@ const App = () => {
         </div>
       )}
 
-      {currentScreen === 'selection' && (
-        <div className="content-section">
-          <h2 style={{ textAlign: 'center', marginBottom: '40px' }}>📚 Let's Set Up Your Learning Adventure! 📚</h2>
-          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-            <div className="kid-card">
-              <select value={userGrade} onChange={(e) => setUserGrade(e.target.value)}>
-                <option value="">🎓 What grade are you in?</option>
-                <option>5th Grade</option>
-                <option>6th Grade</option>
-                <option>7th Grade</option>
-                <option>8th Grade</option>
-                <option>9th Grade</option>
-                <option>10th Grade</option>
-              </select>
-            </div>
-            <div className="kid-card">
-              <select value={userBoard} onChange={(e) => setUserBoard(e.target.value)}>
-                <option value="">📖 Which board do you follow?</option>
-                <option>Karnataka State Board</option>
-                <option>CBSE</option>
-                <option>ICSE</option>
-                <option>IGCSE</option>
-                <option>IB</option>
-              </select>
-            </div>
-            <div className="kid-card">
-              <select value={userSubject} onChange={(e) => setUserSubject(e.target.value)}>
-                <option value="">🔬 What subject shall we explore?</option>
-                <option>Math</option>
-                <option>Science</option>
-                <option>English</option>
-                <option>Social Studies</option>
-                <option>Physics</option>
-                <option>Chemistry</option>
-                <option>Biology</option>
-              </select>
-            </div>
-            <div className="button-group">
-              <button className="big-button" onClick={setupLearning}>
-                🌟 Begin My Learning Journey!
-              </button>
-            </div>
-            {selectionStatus && (
-              <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '18px', fontWeight: '600', color: 'white' }}>
-                {selectionStatus}
-              </div>
-            )}
-          </div>
+{currentScreen === 'selection' && (
+  <div className="content-section">
+    <h2 style={{ textAlign: 'center', marginBottom: '40px' }}>
+      📚 Let's Set Up Your Learning Adventure! 📚
+    </h2>
+
+    <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+
+      {/* --- GRADES LIST --- */}
+      <div className="kid-card">
+        <select value={userGrade} onChange={(e) => setUserGrade(e.target.value)}>
+          <option value="">🎓 What grade are you in?</option>
+          {grades.map(g => (
+            <option key={g.id} value={g.id}>{g.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* --- BOARDS LIST --- */}
+      <div className="kid-card">
+        <select value={userBoard} onChange={(e) => setUserBoard(e.target.value)}>
+          <option value="">📖 Which board do you follow?</option>
+          {boards.map(b => (
+            <option key={b.id} value={b.id}>{b.name}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* --- SUBJECT LIST --- */}
+      <div className="kid-card">
+        <select value={userSubjectId || ''} onChange={handleSubjectChange}>
+          <option value="">🔬 What subject shall we explore?</option>
+          {subjects.map(s => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="button-group">
+        <button className="big-button" onClick={setupLearning}>
+          🌟 Begin My Learning Journey!
+        </button>
+      </div>
+
+      {selectionStatus && (
+        <div style={{ textAlign: 'center', marginTop: '20px', fontSize: '18px', fontWeight: '600', color: 'white' }}>
+          {selectionStatus}
         </div>
       )}
+    </div>
+  </div>
+)}
 
 
+{currentScreen === "selectChapter" && (
+  <div style={{ textAlign: "center", marginTop: "40px" }}>
+    <h2>📘 Select a Chapter</h2>
+
+    <select
+      className="kid-card"
+      style={{ width: "80%", padding: "15px", marginTop: "20px" }}
+      value={selectedDbChapter || ""}
+      onChange={(e) => setSelectedDbChapter(e.target.value)}
+    >
+      <option value="">-- Choose a Chapter --</option>
+      {dbChapters.map((ch) => (
+        <option key={ch.id} value={ch.id}>{ch.title}</option>
+      ))}
+    </select>
+
+    <button
+      className="big-button"
+      style={{ marginTop: "20px" }}
+      disabled={!selectedDbChapter}
+      onClick={() => setCurrentScreen("main")}
+    >
+      🚀 Start Learning!
+    </button>
+  </div>
+)}
 
 
       {currentScreen === 'main' && (
@@ -1314,9 +1403,15 @@ const App = () => {
             </div>
           )}
 
-          {activeTab === 'flashcards' && <FlashcardView />}
+{activeTab === 'flashcards' && (
+    <FlashcardView 
+        studentId={1} 
+        chapterId={selectedDbChapter}   // pass chapter id here 
+    />
+)}
+
           
-          <SyllabusUploader />
+          
 
 
 

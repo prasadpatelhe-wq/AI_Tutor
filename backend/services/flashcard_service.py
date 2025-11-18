@@ -13,6 +13,7 @@ from backend.models.students import Student
 from backend.models.student_progress import StudentProgress
 from backend.database import SessionLocal
 from datetime import datetime
+import json
 
 
 def get_db():
@@ -28,47 +29,46 @@ def get_db():
 # Save flashcards after a quiz
 # -----------------------------------------------------------
 def save_flashcards_from_quiz(
-    quiz_data: dict,
-    subject_name: str,
-    chapter_title: str,
-    db: Session,
-    student_id: int = None
+        quiz_data: dict,
+        subject_name: str,
+        chapter_title: str,
+        db: Session,
+        student_id: int = None
 ):
     """
     Saves quiz questions as flashcards.
-    ✅ Automatically links them to a student (if not provided).
+    ❗ Never creates subject or chapter.
+    ❗ Only uses existing DB records.
     """
 
     from backend.models.quiz import Quiz
     from backend.models.question import Question
 
-    # 1️⃣ Auto-detect student if not provided
+    # 1️⃣ Auto-detect student if missing
     if student_id is None:
         student = db.query(Student).first()
         if not student:
             raise Exception("❌ No student found in database. Please add one first.")
         student_id = student.id
 
-    # 2️⃣ Get or create subject
+    # 2️⃣ Fetch EXISTING subject
     subject = db.query(Subject).filter(Subject.name == subject_name).first()
     if not subject:
-        subject = Subject(name=subject_name)
-        db.add(subject)
-        db.commit()
-        db.refresh(subject)
+        raise Exception(f"❌ Subject '{subject_name}' does NOT exist in DB. Please insert it manually.")
 
-    # 3️⃣ Get or create chapter
+    # 3️⃣ Fetch EXISTING chapter
     chapter = db.query(Chapter).filter(
         Chapter.title == chapter_title,
         Chapter.subject_id == subject.id
     ).first()
-    if not chapter:
-        chapter = Chapter(title=chapter_title, subject_id=subject.id)
-        db.add(chapter)
-        db.commit()
-        db.refresh(chapter)
 
-    # 4️⃣ Create quiz record
+    if not chapter:
+        raise Exception(
+            f"❌ Chapter '{chapter_title}' for subject '{subject_name}' does NOT exist in DB. "
+            "Do not auto-create — please add manually."
+        )
+
+    # 4️⃣ Create quiz record (this is fine)
     quiz = Quiz(
         subject_id=subject.id,
         chapter_id=chapter.id,
@@ -79,54 +79,47 @@ def save_flashcards_from_quiz(
     db.commit()
     db.refresh(quiz)
 
-    # 5️⃣ Save questions + flashcards
+    # 5️⃣ Save all questions + flashcards
     for q in quiz_data.get("questions", []):
+
         correct_option = None
         options = q.get("options", [])
         idx = q.get("correct_option_index")
+
         if isinstance(idx, int) and 0 <= idx < len(options):
             correct_option = options[idx]
 
-        # Save question
+        # Save Question
         question = Question(
-            quiz_id=quiz.id,
             question_text=q.get("question_text"),
-            options=options,
+            options=json.dumps(options),
             correct_option=correct_option or "",
-            explanation=q.get("explanation", "")
+            explanation=q.get("explanation", ""),
+            type=q.get("type"),
+            difficulty=q.get("difficulty")
         )
         db.add(question)
         db.commit()
         db.refresh(question)
 
-        # Save flashcard (always linked to a student)
+        # Save Flashcard (linked to existing chapter)
         flashcard = Flashcard(
-            quiz_id=quiz.id,
             question_text=q.get("question_text"),
             correct_option=correct_option,
             explanation=q.get("explanation", ""),
             subject_id=subject.id,
-            chapter_id=chapter.id,
+            chapter_id=chapter.id,  # 👉 IMPORTANT
             difficulty=quiz_data.get("difficulty", "basic"),
             student_id=student_id
         )
+
         db.add(flashcard)
         db.commit()
-        db.refresh(flashcard)
 
-        # Add progress tracking entry
-        progress = StudentProgress(
-            student_id=student_id,
-            flashcard_id=flashcard.id,
-            status="new",
-            attempts=0,
-            last_reviewed=datetime.now(),
-            next_review=None
-        )
-        db.add(progress)
-        db.commit()
-
-    return {"message": f"✅ Flashcards saved for {subject_name} - {chapter_title} (Student ID: {student_id})"}
+    return {
+        "message": f"✅ Flashcards saved for existing chapter {chapter_title}",
+        "chapter_id": chapter.id
+    }
 
 
 # -----------------------------------------------------------

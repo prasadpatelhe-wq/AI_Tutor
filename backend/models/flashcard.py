@@ -1,19 +1,23 @@
-# backend/models/flashcard.py
-from sqlalchemy import Column, Integer, ForeignKey, String, Text, DateTime, func
 from backend.database import Base
+from sqlalchemy import Column, Integer, Text, String, ForeignKey, DateTime
+from sqlalchemy.orm import relationship
+from datetime import datetime
+
 
 class Flashcard(Base):
-    __tablename__ = "flashcards"
+    __tablename__ = "flashcard"
 
-    id = Column(Integer, primary_key=True, index=True)
-    quiz_id = Column(Integer, ForeignKey("quizzes.id"))
-    question_text = Column(Text, nullable=False)
-    correct_option = Column(String(255), nullable=True)
-    explanation = Column(Text, nullable=True)
+    id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("students.id"))
     subject_id = Column(Integer, ForeignKey("subjects.id"))
     chapter_id = Column(Integer, ForeignKey("chapters.id"))
-    difficulty = Column(String(20))
-    created_at = Column(DateTime, server_default=func.now())
 
-    # optional personalization
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=True)
+    question_text = Column(Text)
+    correct_option = Column(String(255))
+    explanation = Column(Text)
+    difficulty = Column(String(50))
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    student = relationship("Student", back_populates="flashcards")
+    subject = relationship("Subject")
+    chapter = relationship("Chapter")
