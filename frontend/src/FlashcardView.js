@@ -6,6 +6,7 @@ const API_BASE_URL = "http://localhost:8000";
 const FlashcardView = ({ chapterId }) => {
   const [flashcards, setFlashcards] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [flippedCards, setFlippedCards] = useState({});
   const studentId = 1; // static for now
 
   useEffect(() => {
@@ -52,13 +53,34 @@ const FlashcardView = ({ chapterId }) => {
             gap: "20px",
           }}
         >
-          {flashcards.map((card) => (
-            <div key={card.id} className="kid-card" style={{ textAlign: "center" }}>
-              <h4 style={{ color: "#667eea" }}>{card.question}</h4>
-              <p>💡 {card.explanation}</p>
-              <p>Difficulty: <strong>{card.difficulty}</strong></p>
-            </div>
-          ))}
+          {flashcards.map((card) => {
+            const isFlipped = flippedCards[card.id];
+            return (
+              <div
+                key={card.id}
+                className="kid-card clickable"
+                style={{
+                  textAlign: "center",
+                  cursor: "pointer",
+                }}
+                onClick={() => {
+                  setFlippedCards((prev) => ({
+                    ...prev,
+                    [card.id]: !prev[card.id],
+                  }));
+                }}
+              >
+                <h4 style={{ color: "#667eea" }}>{card.question}</h4>
+                {isFlipped ? (
+                  <p>💡 {card.explanation}</p>
+                ) : (
+                  <p style={{ fontStyle: "italic", color: "#cbd5f5" }}>
+                    Tap to reveal the answer
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
