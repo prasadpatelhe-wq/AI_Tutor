@@ -27,13 +27,16 @@ import {
   buyPerk as apiBuyPerk,
   generateLearningRoadmap as apiGenerateLearningRoadmap,
   chatWithTutor as apiChatWithTutor,
+  getStudentScore as apiGetStudentScore,
 } from "./api";
 
 const App = () => {
   // Game State
   const [gameState, setGameState] = useState({
     coins: 100,
+    total_score: 0, // Added total_score
     total_coins_earned: 100,
+    coin_board: [],
     streak_days: 0,
     quizzes_completed: 0,
     videos_watched: 0,
@@ -66,7 +69,7 @@ const App = () => {
   const [currentQuestion, setCurrentQuestion] = useState('');
   const [answerOptions, setAnswerOptions] = useState(['', '', '', '']);
   const [quizProgress, setQuizProgress] = useState('');
-  const [quizResults, setQuizResults] = useState('');
+  const [quizResults, setQuizResults] = useState(null);
   const [perkResult, setPerkResult] = useState('');
   const [parentPin, setParentPin] = useState('');
   const [parentStatus, setParentStatus] = useState('');
@@ -85,12 +88,12 @@ const App = () => {
     currentChapter,
     nextChapter,
     loadSyllabus,
-    fetchChaptersFromDB,   
+    fetchChaptersFromDB,
     dbChapters,
     selectedDbChapter,
     setSelectedDbChapter
   } = useContext(SyllabusContext);
-  
+
   // Front page subject, grade, board loader
   useEffect(() => {
     const loadDropdowns = async () => {
@@ -110,8 +113,9 @@ const App = () => {
     };
 
     loadDropdowns();
+    getStudentScore(); // Fetch initial score
   }, []);
-  
+
   useEffect(() => {
     if (!quizContainerVisible || !Array.isArray(quizQuestions) || quizQuestions.length === 0) {
       setCurrentQuestion('');
@@ -140,7 +144,7 @@ const App = () => {
     setCurrentQuestion(`Question ${questionNumber}: ${questionText}`);
     setAnswerOptions(options);
   }, [quizContainerVisible, quizQuestions, currentQuestionIndex]);
-  
+
   // Loading States
   const [loading, setLoading] = useState({
     roadmap: false,
@@ -151,11 +155,7 @@ const App = () => {
     perk: false,
   });
 
-  // Error States
-  const [errors, setErrors] = useState({
-    api: '',
-    general: '',
-  });
+
 
   // Sample Data
   const SAMPLE_VIDEOS = {
@@ -169,23 +169,33 @@ const App = () => {
   ];
 
   // Helper Functions
-  const addCoins = (amount) => {
-    setGameState((prev) => ({
-      ...prev,
-      coins: prev.coins + amount,
-      total_coins_earned: prev.total_coins_earned + amount,
-    }));
+  const addCoins = (amount, source = 'Reward') => {
+    if (!amount) return;
+    setGameState((prev) => {
+      const updatedCoins = prev.coins + amount;
+      const updatedTotal = prev.total_coins_earned + amount;
+      const updatedBoard = [
+        ...(prev.coin_board || []),
+        {
+          id: `${Date.now()}-${(prev.coin_board || []).length}`,
+          source,
+          amount,
+          total: updatedTotal,
+          timestamp: new Date().toISOString(),
+        },
+      ];
+      return {
+        ...prev,
+        coins: updatedCoins,
+        total_coins_earned: updatedTotal,
+        coin_board: updatedBoard,
+      };
+    });
   };
 
-  const spendCoins = (amount) => {
-    if (gameState.coins >= amount) {
-      setGameState((prev) => ({ ...prev, coins: prev.coins - amount }));
-      return true;
-    }
-    return false;
-  };
 
-  const getCoinDisplay = () => `🪙 ${gameState.coins} Coins`;
+
+  const getCoinDisplay = () => `🏆 Score: ${gameState.total_score || 0}`;
 
   // API Wrapper Functions
   const verifyParentPin = async (pin) => {
@@ -212,8 +222,20 @@ const App = () => {
     return await apiGenerateQuiz(selectedDbChapter, userSubject, userGrade, setLoading);
   };
 
-  const calculateQuizScore = async (answers, questions) => {
-    return await apiCalculateQuizScore(answers, questions, addCoins, setGameState);
+  const calculateQuizScore = async (answers, questions, passedAddCoins, passedSetGameState, difficulty, chapterId, subjectId) => {
+    const result = await apiCalculateQuizScore(
+      answers,
+      questions,
+      addCoins,
+      setGameState,
+      difficulty,
+      chapterId,
+      subjectId,
+      1 // Hardcoded studentId
+    );
+    // Refresh score after quiz
+    getStudentScore();
+    return result;
   };
 
   const buyPerk = async (perkIndex) => {
@@ -226,6 +248,13 @@ const App = () => {
 
   const chatWithTutor = async (message) => {
     await apiChatWithTutor(message, chatHistory, userSubject, userGrade, setLoading, setChatHistory, setChatMessage);
+  };
+
+  const getStudentScore = async () => {
+    const scoreData = await apiGetStudentScore(1); // Hardcoded student ID 1 for now
+    if (scoreData) {
+      setGameState(prev => ({ ...prev, total_score: scoreData.total_score }));
+    }
   };
 
   // Event Handlers
@@ -287,32 +316,38 @@ const App = () => {
   };
 
   const startQuizSession = async () => {
-    const questions = await generateQuiz();
-    setQuizQuestions(questions);
-    setQuizAnswers(new Array(questions.length).fill(-1));
+    const data = await generateQuiz();
+    // If data is the full object {basic: ..., medium: ...}, we can just store it or store basic.
+    // Since QuizView handles it, we just return it.
+    // But to keep App.js state consistent if used elsewhere, let's store basic questions if available.
+    const basicQuestions = data?.basic || [];
+    setQuizQuestions(basicQuestions);
+    setQuizAnswers(new Array(basicQuestions.length).fill(-1));
     setQuizContainerVisible(true);
     setCurrentQuestionIndex(0);
-    setQuizProgress(`Progress: 0/${questions.length}`);
+    setQuizProgress(`Progress: 0/${basicQuestions.length}`);
+    return data;
   };
 
   const handleQuizAnswer = (answerIndex) => {
     const newAnswers = [...quizAnswers];
     newAnswers[currentQuestionIndex] = answerIndex;
     setQuizAnswers(newAnswers);
-    
-    // Move to next question or show submit button
+
+    // No longer auto-advancing. User must click "Next"
+  };
+
+  const handleNextQuestion = () => {
     if (currentQuestionIndex < quizQuestions.length - 1) {
       const nextIndex = currentQuestionIndex + 1;
       setCurrentQuestionIndex(nextIndex);
-      setQuizProgress(`Progress: ${nextIndex}/${quizQuestions.length}`);
-    } else {
-      setQuizProgress(`Progress: ${quizQuestions.length}/${quizQuestions.length} - Ready to submit!`);
+      setQuizProgress(`Progress: ${nextIndex + 1}/${quizQuestions.length}`);
     }
   };
 
   const submitQuizFinal = async () => {
     const result = await calculateQuizScore(quizAnswers, quizQuestions);
-    setQuizResults(`Quiz Complete! Score: ${result.score} (${result.percentage}%) Coins: ${result.coins} - ${result.message}`);
+    setQuizResults(result);
     setQuizContainerVisible(false);
   };
 
@@ -320,7 +355,7 @@ const App = () => {
   return (
     <div className="container fade-in">
       <style>{styles}</style>
-      
+
       {currentScreen === 'welcome' && (
         <WelcomeView
           switchToSelection={switchToSelection}
@@ -430,12 +465,18 @@ const App = () => {
               quizQuestions={quizQuestions}
               submitQuizFinal={submitQuizFinal}
               quizResults={quizResults}
+              handleNextQuestion={handleNextQuestion}
+              userSubjectId={userSubjectId}
+              selectedDbChapter={selectedDbChapter}
+              calculateQuizScore={calculateQuizScore}
+              addCoins={addCoins}
+              setGameState={setGameState}
             />
           )}
 
           {activeTab === 'flashcards' && (
-            <FlashcardView 
-              studentId={1} 
+            <FlashcardView
+              studentId={1}
               chapterId={selectedDbChapter}
             />
           )}

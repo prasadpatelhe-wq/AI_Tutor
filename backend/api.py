@@ -46,6 +46,7 @@ class GameState:
     def __init__(self):
         self.coins = 100  # Starting coins
         self.total_coins_earned = 100
+        self.coin_board = []
         self.streak_days = 0
         self.quizzes_completed = 0
         self.videos_watched = 0
@@ -55,9 +56,19 @@ class GameState:
         self.attention_score = 100
         self.parent_authenticated = False
 
-    def add_coins(self, amount):
+    def add_coins(self, amount, source="General"):
+        if amount <= 0:
+            return
         self.coins += amount
         self.total_coins_earned += amount
+        self.coin_board.append(
+            {
+                "timestamp": datetime.utcnow().isoformat(),
+                "source": source,
+                "amount": amount,
+                "total": self.total_coins_earned,
+            }
+        )
 
     def spend_coins(self, amount):
         if self.coins >= amount:
@@ -132,6 +143,10 @@ class FlashcardFetchRequest(BaseModel):
 class QuizScoreRequest(BaseModel):
     answers: list[int]
     correct_answers: list[int]
+    difficulty: str = "basic"
+    chapter_id: int = None
+    subject_id: int = None
+    student_id: int = None
 
 class PerkBuyRequest(BaseModel):
     perk_index: int
@@ -217,7 +232,7 @@ def api_simulate_attention_check():
 @app.post("/complete_video_watching")
 def api_complete_video_watching(req: VideoRequest):
     coins_earned = 20
-    game_state.add_coins(coins_earned)
+    game_state.add_coins(coins_earned, source=f"Video: {req.subject}")
     game_state.videos_watched += 1
     game_state.daily_progress["videos"] += 1
     return {"message": f"🎉 Great job! You earned {coins_earned} coins for watching the video! 🎉", "coins_earned": coins_earned, "coins": game_state.coins}
@@ -283,24 +298,39 @@ def api_calculate_quiz_score(req: QuizScoreRequest):
     total = len(req.correct_answers)
     percentage = (correct / total) * 100 if total > 0 else 0
 
-    if percentage >= 80:
-        coins = 50
-        emoji = "🎉"
-        message = "Amazing! You're a superstar!"
-    elif percentage >= 60:
-        coins = 30
-        emoji = "👏"
-        message = "Great job! Keep it up!"
-    elif percentage >= 40:
-        coins = 20
-        emoji = "👍"
-        message = "Good effort! Try again to improve!"
-    else:
-        coins = 10
-        emoji = "💪"
-        message = "Keep practicing! You'll get better!"
+    # Save to Scorecard
+    db = SessionLocal()
+    try:
+        from backend.models.scorecard import Scorecard
+        new_score = Scorecard(
+            student_id=req.student_id, # Can be None
+            subject_id=req.subject_id,
+            chapter_id=req.chapter_id,
+            score=correct,
+            total_questions=total,
+            difficulty=req.difficulty,
+            timestamp=datetime.utcnow()
+        )
+        db.add(new_score)
+        db.commit()
+    except Exception as e:
+        print(f"Error saving score: {e}")
+    finally:
+        db.close()
 
-    game_state.add_coins(coins)
+    coins = correct * 10
+
+    if correct == total and total > 0:
+        emoji = "🌟"
+        message = "Perfect score! You mastered every question!"
+    elif correct > 0:
+        emoji = "🎯"
+        message = f"Great job! You answered {correct} question{'s' if correct != 1 else ''} correctly."
+    else:
+        emoji = "💪"
+        message = "Keep practicing! You'll get better with each try!"
+
+    game_state.add_coins(coins, source="Quiz Correct Answers")
     game_state.quizzes_completed += 1
     game_state.daily_progress["quizzes"] += 1
 
@@ -311,6 +341,23 @@ def api_calculate_quiz_score(req: QuizScoreRequest):
         "emoji": emoji,
         "message": message
     }
+
+@app.get("/student_score/{student_id}")
+def api_get_student_score(student_id: int):
+    db = SessionLocal()
+    try:
+        from backend.models.scorecard import Scorecard
+        from sqlalchemy import func
+        
+        # Calculate total score (sum of 'score' column)
+        total_score = db.query(func.sum(Scorecard.score)).filter(Scorecard.student_id == student_id).scalar() or 0
+        
+        return {"student_id": student_id, "total_score": total_score}
+    except Exception as e:
+        logger.error(f"Error fetching student score: {e}")
+        raise HTTPException(status_code=500, detail="Error fetching score")
+    finally:
+        db.close()
 
 @app.get("/coin_display")
 def api_get_coin_display():
@@ -412,4 +459,3 @@ if __name__ == "__main__":
     import uvicorn
     print("🚀 Starting AI Tutor API...")
     uvicorn.run("backend.api:app", host="127.0.0.1", port=8000, reload=False)
-

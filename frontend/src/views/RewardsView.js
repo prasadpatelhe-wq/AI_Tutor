@@ -1,6 +1,10 @@
 import React from 'react';
 
 const RewardsView = ({ gameState, PERKS_SHOP, buyPerk, loading, perkResult }) => {
+  const coinBoard = Array.isArray(gameState.coin_board)
+    ? [...gameState.coin_board].slice(-5).reverse()
+    : [];
+
   return (
     <div className="content-section">
       <h3 style={{ textAlign: 'center', marginBottom: '30px' }}>🎁 Your Amazing Rewards</h3>
@@ -26,6 +30,34 @@ const RewardsView = ({ gameState, PERKS_SHOP, buyPerk, loading, perkResult }) =>
         </div>
       </div>
       
+      <div className="kid-card">
+        <h4 style={{ color: '#667eea', marginBottom: '20px' }}>🪙 Student Coin Board</h4>
+        {coinBoard.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {coinBoard.map((entry) => (
+              <div
+                key={entry.id || entry.timestamp}
+                className="quiz-card"
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <div>
+                  <div style={{ fontWeight: '600', color: '#667eea' }}>{entry.source}</div>
+                  <div style={{ fontSize: '12px', color: '#999' }}>
+                    {entry.timestamp ? new Date(entry.timestamp).toLocaleString() : ''}
+                  </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontSize: '18px', fontWeight: '700', color: '#f7971e' }}>+{entry.amount} 🪙</div>
+                  <div style={{ fontSize: '13px', color: '#666' }}>Total: {entry.total}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p style={{ fontSize: '15px', color: '#666', margin: 0 }}>Complete a quiz or video to start earning coins!</p>
+        )}
+      </div>
+
       <div className="kid-card">
         <h4 style={{ color: '#667eea', marginBottom: '20px' }}>🛍️ Awesome Perk Shop</h4>
         <div style={{ display: 'grid', gap: '20px', marginBottom: '30px' }}>

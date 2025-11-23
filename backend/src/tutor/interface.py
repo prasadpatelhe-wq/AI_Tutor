@@ -101,9 +101,6 @@ class AI_Tutor:
     # ----------------------------------------------------------
     # Quiz generation
     # ----------------------------------------------------------
-    # ----------------------------------------------------------
-    # Quiz generation
-    # ----------------------------------------------------------
     def generate_quiz(
             self,
             grade_band: str,
@@ -156,26 +153,24 @@ class AI_Tutor:
         Allowed question types: {', '.join(allowed_types)}.
         {tone}
 
-        ✅ IMPORTANT INSTRUCTIONS:
-        - Every question MUST be a JSON object in a list.
-        - Include fields: id, type, question_text, options (list), correct_option_index (integer), explanation, difficulty, interactive_element.
-        - Even for fill-in-the-blank or short-answer, provide at least 4 options (one correct and a few distractors).
-        - Example:
-          {{
+        ✅ CRITICAL OUTPUT INSTRUCTIONS:
+        - You MUST output a SINGLE valid JSON list of objects.
+        - Do NOT include any text, markdown formatting (like ```json), or explanations outside the JSON array.
+        - The output should start with '[' and end with ']'.
+        
+        Structure for each question object:
+        {{
             "id": "Q1",
-            "type": "fill_in_the_blank",
-            "question_text": "5 + 3 = ___",
-            "options": ["8", "6", "9","7"],
+            "type": "question_type_here",
+            "question_text": "The actual question?",
+            "options": ["Option A", "Option B", "Option C", "Option D"],
             "correct_option_index": 0,
-            "explanation": "Adding 5 and 3 equals 8.",
-            "difficulty": "BASIC",
+            "explanation": "Why this is correct.",
+            "difficulty": "{difficulty}",
             "interactive_element": "dropdown"
-          }}
-        - Avoid any fallback or example questions. Base questions strictly on the chapter summary.
+        }}
 
-        For pronunciation-type questions, always include:
-        - phonetic_hint (e.g., "kuh-AHT" for "cat")
-        - audio_url (e.g., "https://example.com/audio/cat.mp3")
+        Ensure all keys are present. For 'fill_in_the_blank', provide options too.
         """
 
         response_data = self.model_framework.generate_response(

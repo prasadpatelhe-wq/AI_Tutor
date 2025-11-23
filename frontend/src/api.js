@@ -55,9 +55,9 @@ export const simulateAttentionCheck = async (setGameState, setSocraticQuestion, 
   try {
     const response = await api.get('/simulate_attention_check');
     const { attention_level, needs_check, socratic_question } = response.data || {};
-    
+
     setGameState((prev) => ({ ...prev, attention_score: attention_level || 100 }));
-    
+
     if (needs_check && socratic_question) {
       setSocraticQuestion(socratic_question);
       setAttentionAlert(`🚨 Focus Check! 🚨\n\n${socratic_question}`);
@@ -74,8 +74,8 @@ export const completeVideoWatching = async (subject, addCoins, setGameState, set
   try {
     const response = await api.post('/complete_video_watching', { subject });
     const { coins_earned } = response.data;
-    
-    addCoins(coins_earned);
+
+    addCoins(coins_earned, subject ? `Video - ${subject}` : 'Video Reward');
     setGameState((prev) => ({
       ...prev,
       videos_watched: prev.videos_watched + 1,
@@ -94,7 +94,7 @@ export const generateQuiz = async (selectedDbChapter, userSubject, userGrade, se
   try {
     if (!selectedDbChapter) {
       console.error("❌ No chapter selected!");
-      return [];
+      return null;
     }
 
     // 1️⃣ Fetch chapter details
@@ -109,55 +109,61 @@ export const generateQuiz = async (selectedDbChapter, userSubject, userGrade, se
       chapter_title: chapter.title || "",
       chapter_summary: chapter.summary || chapter.description || "",
       num_questions: 5,
-      difficulty: "basic",
+      difficulty: "basic", // This might be ignored by backend if it generates all, but good to keep
     });
 
     console.log("🔥 Backend quiz response:", response.data);
 
-    // 3️⃣ Validate response
-    if (!response.data.basic || !Array.isArray(response.data.basic)) {
-      console.error("❌ Invalid quiz format:", response.data);
-      return [];
-    }
-
-    const quizArray = response.data.basic;
-    return quizArray[0]?.questions || [];
+    // 3️⃣ Return full response (contains basic, medium, hard)
+    return response.data;
 
   } catch (error) {
     console.error("Generate quiz error:", error);
-    return [];
+    return null;
   } finally {
     setLoading(prev => ({ ...prev, quiz: false }));
   }
 };
 
-export const calculateQuizScore = async (answers, questions, addCoins, setGameState) => {
+export const calculateQuizScore = async (answers, questions, addCoins, setGameState, difficulty, chapterId, subjectId, studentId) => {
   try {
-    const correctAnswers = questions.map(q => q.correct);
-    const response = await api.post('/calculate_quiz_score', { 
+    const correctAnswers = questions.map(q => q.correct_option_index ?? q.correct);
+    const response = await api.post('/calculate_quiz_score', {
       answers,
-      correct_answers: correctAnswers
+      correct_answers: correctAnswers,
+      difficulty: difficulty || 'basic',
+      chapter_id: chapterId,
+      subject_id: subjectId,
+      student_id: studentId
     });
-    
+
     const { score, percentage, coins_earned, message } = response.data;
-    
-    addCoins(coins_earned);
+
+    addCoins(coins_earned, 'Quiz Correct Answers');
     setGameState((prev) => ({
       ...prev,
       quizzes_completed: prev.quizzes_completed + 1,
       daily_progress: { ...prev.daily_progress, quizzes: prev.daily_progress.quizzes + 1 },
     }));
-    
+
     return { score, percentage, coins: coins_earned, message };
   } catch (error) {
     console.error('Calculate quiz score error:', error);
     // Fallback calculation
-    const correctAnswers = questions.map(q => q.correct);
+    const correctAnswers = questions.map(q => q.correct_option_index ?? q.correct);
     const correct = answers.reduce((acc, a, i) => acc + (a === correctAnswers[i] ? 1 : 0), 0);
     const total = questions.length;
     const percentage = (correct / total) * 100;
-    const coins = percentage >= 80 ? 50 : 10;
-    return { score: `${correct}/${total}`, percentage, coins, message: 'Keep practicing!' };
+    const coins = correct * 10;
+    if (coins) {
+      addCoins(coins, 'Quiz Correct Answers');
+    }
+    setGameState((prev) => ({
+      ...prev,
+      quizzes_completed: prev.quizzes_completed + 1,
+      daily_progress: { ...prev.daily_progress, quizzes: prev.daily_progress.quizzes + 1 },
+    }));
+    return { score: `${correct}/${total}`, percentage, coins, message: correct > 0 ? `Great job! You earned ${coins} coins!` : 'Keep practicing!' };
   }
 };
 
@@ -165,13 +171,13 @@ export const buyPerk = async (perkIndex, PERKS_SHOP, setLoading, setGameState, s
   setLoading(prev => ({ ...prev, perk: true }));
   try {
     const response = await api.post('/buy_perk', { perk_index: perkIndex });
-    
+
     if (response.data.success) {
       const perk = PERKS_SHOP[perkIndex];
-      setGameState((prev) => ({ 
-        ...prev, 
+      setGameState((prev) => ({
+        ...prev,
         coins: prev.coins - perk.cost,
-        unlocked_perks: [...prev.unlocked_perks, perk.name] 
+        unlocked_perks: [...prev.unlocked_perks, perk.name]
       }));
       setPerkResult(`🎉 You bought ${perk.name}! Enjoy your new perk!`);
     } else {
@@ -219,7 +225,7 @@ export const generateLearningRoadmap = async (userGrade, userBoard, userSubject,
       board: userBoard,
       subject: userSubject
     });
-    
+
     setLearningPlan(response.data.roadmap);
   } catch (error) {
     console.error('Generate roadmap error:', error);
@@ -231,27 +237,27 @@ export const generateLearningRoadmap = async (userGrade, userBoard, userSubject,
 
 export const chatWithTutor = async (message, chatHistory, userSubject, userGrade, setLoading, setChatHistory, setChatMessage) => {
   if (!message.trim()) return;
-  
+
   setLoading(prev => ({ ...prev, chat: true }));
-  
+
   // Add user message immediately
   const newChatHistory = [...chatHistory, { role: 'user', content: message }];
   setChatHistory(newChatHistory);
   setChatMessage('');
-  
+
   try {
     const response = await api.post('/chat_with_tutor', {
       message,
       subject: userSubject || 'General',
       grade: userGrade || '10th'
     });
-    
+
     const botResponse = response.data?.response || 'Sorry, I didn\'t get a response from the AI.';
     setChatHistory([...newChatHistory, { role: 'assistant', content: botResponse }]);
   } catch (error) {
     console.error('Chat error:', error);
     let errorMessage = '❌ Sorry, I\'m having trouble connecting right now.';
-    
+
     if (error.response?.status === 403) {
       errorMessage = '❌ API Authentication failed. Please check your EURIAI API key.';
     } else if (error.response?.status === 503) {
@@ -259,13 +265,21 @@ export const chatWithTutor = async (message, chatHistory, userSubject, userGrade
     } else if (!error.response) {
       errorMessage = '❌ Cannot connect to backend. Please make sure the backend is running.';
     }
-    
-    setChatHistory([...newChatHistory, { 
-      role: 'assistant', 
+
+    setChatHistory([...newChatHistory, {
+      role: 'assistant',
       content: errorMessage
     }]);
-  } finally {
-    setLoading(prev => ({ ...prev, chat: false }));
+    return null;
   }
 };
 
+export const getStudentScore = async (studentId) => {
+  try {
+    const response = await api.get(`/student_score/${studentId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Get student score error:', error);
+    return null;
+  }
+};
