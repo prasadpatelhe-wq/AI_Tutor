@@ -88,7 +88,7 @@ export const completeVideoWatching = async (subject, addCoins, setGameState, set
   }
 };
 
-export const generateQuiz = async (selectedDbChapter, userSubject, userGrade, setLoading) => {
+export const generateQuiz = async (selectedDbChapter, userSubject, userGrade, setLoading, studentId) => {
   setLoading(prev => ({ ...prev, quiz: true }));
 
   try {
@@ -102,7 +102,7 @@ export const generateQuiz = async (selectedDbChapter, userSubject, userGrade, se
     const chapter = chapterResponse.data;
 
     // 2️⃣ Call backend
-    const response = await api.post("/generate_quiz", {
+    const response = await api.post(`/generate_quiz?student_id=${studentId}`, {
       subject: userSubject,
       grade_band: userGrade,
       chapter_id: String(chapter.id),
@@ -127,7 +127,7 @@ export const generateQuiz = async (selectedDbChapter, userSubject, userGrade, se
 
 export const calculateQuizScore = async (answers, questions, addCoins, setGameState, difficulty, chapterId, subjectId, studentId) => {
   try {
-    const correctAnswers = questions.map(q => q.correct_option_index ?? q.correct);
+    const correctAnswers = questions.map(q => q.correct_option_index ?? q.correct ?? -1);
     const response = await api.post('/calculate_quiz_score', {
       answers,
       correct_answers: correctAnswers,
@@ -281,5 +281,25 @@ export const getStudentScore = async (studentId) => {
   } catch (error) {
     console.error('Get student score error:', error);
     return null;
+  }
+};
+
+export const registerStudent = async (studentData) => {
+  try {
+    const response = await api.post('/students/register', studentData);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Registration error:', error);
+    return { success: false, message: error.response?.data?.detail || 'Registration failed' };
+  }
+};
+
+export const loginStudent = async (credentials) => {
+  try {
+    const response = await api.post('/students/login', credentials);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Login error:', error);
+    return { success: false, message: error.response?.data?.detail || 'Login failed' };
   }
 };

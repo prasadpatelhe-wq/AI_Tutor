@@ -3,7 +3,7 @@ import axios from "axios";
 
 const API_BASE_URL = "http://localhost:8000";
 
-const FlashcardView = ({ chapterId }) => {
+const FlashcardView = ({ chapterId, studentId }) => {
   const [flashcards, setFlashcards] = useState([]);
   const [loading, setLoading] = useState(true);
   const [flippedCards, setFlippedCards] = useState({});
@@ -12,7 +12,6 @@ const FlashcardView = ({ chapterId }) => {
   const [isAnimating, setIsAnimating] = useState(false);
   const [touchStart, setTouchStart] = useState(null);
   const [touchEnd, setTouchEnd] = useState(null);
-  const studentId = 1; // static for now
   const CARD_ANIMATION_DURATION = 320;
 
   // Minimum swipe distance (in px)

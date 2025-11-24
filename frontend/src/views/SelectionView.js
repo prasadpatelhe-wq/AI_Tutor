@@ -7,8 +7,6 @@ const SelectionView = ({
   setUserBoard,
   userSubjectId,
   handleSubjectChange,
-  grades,
-  boards,
   subjects,
   setupLearning,
   selectionStatus
@@ -20,25 +18,6 @@ const SelectionView = ({
       </h2>
 
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-        {/* --- GRADES LIST --- */}
-        <div className="kid-card">
-          <select value={userGrade} onChange={(e) => setUserGrade(e.target.value)}>
-            <option value="">🎓 What grade are you in?</option>
-            {grades.map(g => (
-              <option key={g.id} value={g.id}>{g.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* --- BOARDS LIST --- */}
-        <div className="kid-card">
-          <select value={userBoard} onChange={(e) => setUserBoard(e.target.value)}>
-            <option value="">📖 Which board do you follow?</option>
-            {boards.map(b => (
-              <option key={b.id} value={b.id}>{b.name}</option>
-            ))}
-          </select>
-        </div>
 
         {/* --- SUBJECT LIST --- */}
         <div className="kid-card">

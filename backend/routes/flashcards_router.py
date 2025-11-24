@@ -80,6 +80,7 @@ def api_save_flashcards_from_quiz(req: QuizRequest, student_id: int = 1):
             chapter_title=req.chapter_title,
             db=db,
             student_id=student_id,  # ✅ link flashcards to student
+            chapter_id=req.chapter_id # ✅ Pass chapter_id
         )
 
         return {

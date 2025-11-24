@@ -33,7 +33,8 @@ def save_flashcards_from_quiz(
         subject_name: str,
         chapter_title: str,
         db: Session,
-        student_id: int = None
+        student_id: int = None,
+        chapter_id: int = None  # ✅ Added chapter_id
 ):
     """
     Saves quiz questions as flashcards.
@@ -56,15 +57,21 @@ def save_flashcards_from_quiz(
     if not subject:
         raise Exception(f"❌ Subject '{subject_name}' does NOT exist in DB. Please insert it manually.")
 
-    # 3️⃣ Fetch EXISTING chapter
-    chapter = db.query(Chapter).filter(
-        Chapter.title == chapter_title,
-        Chapter.subject_id == subject.id
-    ).first()
+    # 3️⃣ Fetch EXISTING chapter by ID (Preferred) or Title (Fallback)
+    chapter = None
+    if chapter_id:
+        chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    
+    if not chapter:
+        # Fallback to title lookup if ID fails or not provided
+        chapter = db.query(Chapter).filter(
+            Chapter.title == chapter_title,
+            Chapter.subject_id == subject.id
+        ).first()
 
     if not chapter:
         raise Exception(
-            f"❌ Chapter '{chapter_title}' for subject '{subject_name}' does NOT exist in DB. "
+            f"❌ Chapter '{chapter_title}' (ID: {chapter_id}) for subject '{subject_name}' does NOT exist in DB. "
             "Do not auto-create — please add manually."
         )
 

@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState } from "react";
 import FlashcardView from "./FlashcardView";
 import { SyllabusContext } from "./SyllabusContext";
-import { fetchGrades, fetchBoards, fetchSubjects } from "./meta";
+import { fetchSubjects } from "./meta";
 
 // Import modular components
 import WelcomeView from "./views/WelcomeView";
@@ -13,6 +13,8 @@ import QuizView from "./views/QuizView";
 import RewardsView from "./views/RewardsView";
 import ChatView from "./views/ChatView";
 import ParentView from "./views/ParentView";
+import LoginView from "./views/LoginView";
+import RegisterView from "./views/RegisterView";
 
 // Import styles and API functions
 import { styles } from "./styles";
@@ -30,11 +32,17 @@ import {
   getStudentScore as apiGetStudentScore,
 } from "./api";
 
+import logo from './logo.svg'; // Assuming logo exists
+
 const App = () => {
+  // Auth State
+  const [currentStudent, setCurrentStudent] = useState(null);
+  const [authView, setAuthView] = useState('login'); // 'login' or 'register'
+
   // Game State
   const [gameState, setGameState] = useState({
     coins: 100,
-    total_score: 0, // Added total_score
+    total_score: 0,
     total_coins_earned: 100,
     coin_board: [],
     streak_days: 0,
@@ -77,35 +85,33 @@ const App = () => {
   const [videoCompletionMsg, setVideoCompletionMsg] = useState('');
   const [attentionStatus, setAttentionStatus] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [flashcards, setFlashcards] = useState([]);
-  const [loadingFlashcards, setLoadingFlashcards] = useState(false);
-  const [grades, setGrades] = useState([]);
-  const [boards, setBoards] = useState([]);
   const [subjects, setSubjects] = useState([]);
 
   const {
-    syllabus,
-    currentChapter,
-    nextChapter,
-    loadSyllabus,
     fetchChaptersFromDB,
     dbChapters,
     selectedDbChapter,
     setSelectedDbChapter
   } = useContext(SyllabusContext);
 
-  // Front page subject, grade, board loader
+  // Loading States
+  const [loading, setLoading] = useState({
+    roadmap: false,
+    chat: false,
+    quiz: false,
+    video: false,
+    parent: false,
+    perk: false,
+  });
+
+  // Front page subject loader
   useEffect(() => {
     const loadDropdowns = async () => {
       try {
-        const [g, b, s] = await Promise.all([
-          fetchGrades(),
-          fetchBoards(),
+        const [s] = await Promise.all([
           fetchSubjects(),
         ]);
 
-        setGrades(g.data);
-        setBoards(b.data);
         setSubjects(s.data);
       } catch (err) {
         console.error("Failed loading dropdowns:", err);
@@ -113,8 +119,14 @@ const App = () => {
     };
 
     loadDropdowns();
-    getStudentScore(); // Fetch initial score
   }, []);
+
+  // Fetch score when student logs in
+  useEffect(() => {
+    if (currentStudent) {
+      getStudentScore();
+    }
+  }, [currentStudent]);
 
   useEffect(() => {
     if (!quizContainerVisible || !Array.isArray(quizQuestions) || quizQuestions.length === 0) {
@@ -144,18 +156,6 @@ const App = () => {
     setCurrentQuestion(`Question ${questionNumber}: ${questionText}`);
     setAnswerOptions(options);
   }, [quizContainerVisible, quizQuestions, currentQuestionIndex]);
-
-  // Loading States
-  const [loading, setLoading] = useState({
-    roadmap: false,
-    chat: false,
-    quiz: false,
-    video: false,
-    parent: false,
-    perk: false,
-  });
-
-
 
   // Sample Data
   const SAMPLE_VIDEOS = {
@@ -193,8 +193,6 @@ const App = () => {
     });
   };
 
-
-
   const getCoinDisplay = () => `🏆 Score: ${gameState.total_score || 0}`;
 
   // API Wrapper Functions
@@ -219,7 +217,7 @@ const App = () => {
   };
 
   const generateQuiz = async () => {
-    return await apiGenerateQuiz(selectedDbChapter, userSubject, userGrade, setLoading);
+    return await apiGenerateQuiz(selectedDbChapter, userSubject, userGrade, setLoading, currentStudent?.id);
   };
 
   const calculateQuizScore = async (answers, questions, passedAddCoins, passedSetGameState, difficulty, chapterId, subjectId) => {
@@ -231,7 +229,7 @@ const App = () => {
       difficulty,
       chapterId,
       subjectId,
-      1 // Hardcoded studentId
+      currentStudent?.id // Use logged-in student ID
     );
     // Refresh score after quiz
     getStudentScore();
@@ -251,7 +249,8 @@ const App = () => {
   };
 
   const getStudentScore = async () => {
-    const scoreData = await apiGetStudentScore(1); // Hardcoded student ID 1 for now
+    if (!currentStudent) return;
+    const scoreData = await apiGetStudentScore(currentStudent.id);
     if (scoreData) {
       setGameState(prev => ({ ...prev, total_score: scoreData.total_score }));
     }
@@ -317,9 +316,6 @@ const App = () => {
 
   const startQuizSession = async () => {
     const data = await generateQuiz();
-    // If data is the full object {basic: ..., medium: ...}, we can just store it or store basic.
-    // Since QuizView handles it, we just return it.
-    // But to keep App.js state consistent if used elsewhere, let's store basic questions if available.
     const basicQuestions = data?.basic || [];
     setQuizQuestions(basicQuestions);
     setQuizAnswers(new Array(basicQuestions.length).fill(-1));
@@ -333,8 +329,6 @@ const App = () => {
     const newAnswers = [...quizAnswers];
     newAnswers[currentQuestionIndex] = answerIndex;
     setQuizAnswers(newAnswers);
-
-    // No longer auto-advancing. User must click "Next"
   };
 
   const handleNextQuestion = () => {
@@ -351,10 +345,47 @@ const App = () => {
     setQuizContainerVisible(false);
   };
 
-  // Render
+  // --- Auth Handlers ---
+  const handleLoginSuccess = (student) => {
+    setCurrentStudent(student);
+    setUserGrade(student.grade_band);
+    setUserBoard(student.board || 'CBSE'); // Default if missing
+  };
+
+  const handleRegisterSuccess = () => {
+    setAuthView('login');
+    alert('Registration successful! Please login.');
+  };
+
+  const handleLogout = () => {
+    setCurrentStudent(null);
+    setAuthView('login');
+    setCurrentScreen('welcome');
+    setActiveTab('home');
+  };
+
+  // --- Render Auth Views if not logged in ---
+  if (!currentStudent) {
+    if (authView === 'login') {
+      return <LoginView onLoginSuccess={handleLoginSuccess} onNavigateToRegister={() => setAuthView('register')} />;
+    } else {
+      return <RegisterView onRegisterSuccess={handleRegisterSuccess} onNavigateToLogin={() => setAuthView('login')} />;
+    }
+  }
+
+  // Render Main App
   return (
     <div className="container fade-in">
       <style>{styles}</style>
+
+      {/* Header with Logout */}
+      <header style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 20px', background: '#2d3748', color: 'white', alignItems: 'center', marginBottom: '20px', borderRadius: '8px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <img src={logo} alt="Logo" style={{ height: '30px' }} />
+          <span>Welcome, {currentStudent.name} ({currentStudent.grade_band})</span>
+        </div>
+        <button onClick={handleLogout} style={{ background: '#e53e3e', border: 'none', padding: '5px 10px', color: 'white', borderRadius: '5px', cursor: 'pointer' }}>Logout</button>
+      </header>
 
       {currentScreen === 'welcome' && (
         <WelcomeView
@@ -375,8 +406,6 @@ const App = () => {
           setUserBoard={setUserBoard}
           userSubjectId={userSubjectId}
           handleSubjectChange={handleSubjectChange}
-          grades={grades}
-          boards={boards}
           subjects={subjects}
           setupLearning={setupLearning}
           selectionStatus={selectionStatus}
@@ -476,7 +505,7 @@ const App = () => {
 
           {activeTab === 'flashcards' && (
             <FlashcardView
-              studentId={1}
+              studentId={currentStudent?.id}
               chapterId={selectedDbChapter}
             />
           )}

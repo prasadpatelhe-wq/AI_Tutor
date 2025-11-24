@@ -43,3 +43,15 @@ class ProgressRequest(BaseModel):
     student_id: int
     flashcard_id: int
     correct: bool
+
+class StudentRegisterRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    grade_band: str
+    board: str = "CBSE"  # Default to CBSE if not provided
+
+class StudentLoginRequest(BaseModel):
+    email: str
+    password: str
+

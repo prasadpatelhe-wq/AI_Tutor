@@ -36,7 +36,44 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.routes.subjects_router import router as subjects_router
 from backend.routes.chapters_router import router as chapters_router
 from backend.routes.meta_router import router as meta_router
+from backend.routes.students_router import router as students_router
 import logging
+import sqlite3
+
+# === Database Schema Migration ===
+def run_migrations():
+    try:
+        # Connect to the database directly to run raw SQL for schema updates
+        # This is a simple migration strategy for SQLite
+        db_path = os.path.join(ROOT_DIR, "tutor.db")
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Check if columns exist in students table
+        cursor.execute("PRAGMA table_info(students)")
+        columns = [info[1] for info in cursor.fetchall()]
+        
+        if "is_active" not in columns:
+            print("Migrating: Adding is_active column to students table...")
+            cursor.execute("ALTER TABLE students ADD COLUMN is_active INTEGER DEFAULT 1")
+            
+        if "password" not in columns:
+            print("Migrating: Adding password column to students table...")
+            cursor.execute("ALTER TABLE students ADD COLUMN password TEXT")
+
+        if "board" not in columns:
+            print("Migrating: Adding board column to students table...")
+            cursor.execute("ALTER TABLE students ADD COLUMN board TEXT")
+            
+        conn.commit()
+        conn.close()
+        print("✅ Database schema check completed.")
+    except Exception as e:
+        print(f"⚠️ Migration warning: {e}")
+
+run_migrations()
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Euri AI Tutor API", version="2.0")
@@ -140,13 +177,15 @@ class FlashcardFetchRequest(BaseModel):
     subject: str
     chapter: str
 
+from typing import Optional
+
 class QuizScoreRequest(BaseModel):
     answers: list[int]
     correct_answers: list[int]
     difficulty: str = "basic"
-    chapter_id: int = None
-    subject_id: int = None
-    student_id: int = None
+    chapter_id: Optional[int] = None
+    subject_id: Optional[int] = None
+    student_id: Optional[int] = None
 
 class PerkBuyRequest(BaseModel):
     perk_index: int
@@ -170,7 +209,9 @@ class ProgressRequest(BaseModel):
 app.include_router(flashcards_router)
 app.include_router(chapters_router)
 app.include_router(subjects_router)
+app.include_router(subjects_router)
 app.include_router(meta_router)
+app.include_router(students_router)
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
@@ -279,7 +320,8 @@ def generate_quiz(request: QuizRequest, student_id: int = None):
                     subject_name=request.subject,
                     chapter_title=request.chapter_title,
                     db=db,
-                    student_id=student_id  # store which student generated it
+                    student_id=student_id,  # store which student generated it
+                    chapter_id=request.chapter_id # ✅ Pass chapter_id
                 )
 
         # ✅ Step 4: Return quiz data (for frontend)
