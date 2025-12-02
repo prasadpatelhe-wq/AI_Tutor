@@ -374,7 +374,7 @@ body {
     border-radius: 16px;
 }
 .selection-label {
-    color: #f2efff;
+    color: #d1c0c9ff;
     margin-bottom: 6px;
     font-weight: 600;
     font-size: 14px;
@@ -383,7 +383,7 @@ body {
 .selection-input {
     font-size: 15px;
     height: 48px;
-    color: #f5f1ff;
+    color: #010003ff;
     background: rgba(255,255,255,0.06);
     border: 1px solid rgba(255,255,255,0.14);
     appearance: none;

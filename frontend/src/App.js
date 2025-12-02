@@ -382,7 +382,7 @@ const App = () => {
       {/* Header with Logout */}
       <header style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 20px', background: '#2d3748', color: 'white', alignItems: 'center', marginBottom: '20px', borderRadius: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src={logo} alt="Logo" style={{ height: '30px' }} />
+          
           <span>Welcome, {currentStudent.name} ({currentStudent.grade_band})</span>
         </div>
         <button onClick={handleLogout} style={{ background: '#e53e3e', border: 'none', padding: '5px 10px', color: 'white', borderRadius: '5px', cursor: 'pointer' }}>Logout</button>
