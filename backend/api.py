@@ -24,7 +24,7 @@ from backend.app.schemas import (  # noqa: E402
     RoadmapRequest,
     ChatRequest,
 )
-from backend.database import SessionLocal  # noqa: E402
+from backend.database import SessionLocal, engine  # noqa: E402
 from backend.routes.flashcards_router import router as flashcards_router  # noqa: E402
 from backend.routes.subjects_router import router as subjects_router  # noqa: E402
 from backend.routes.chapters_router import router as chapters_router  # noqa: E402
@@ -39,7 +39,7 @@ def run_migrations():
     try:
         # Connect to the database directly to run raw SQL for schema updates
         # This is a simple migration strategy for SQLite
-        db_path = os.path.join(ROOT_DIR, "tutor.db")
+        db_path = engine.url.database
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
         

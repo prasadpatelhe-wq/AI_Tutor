@@ -15,6 +15,7 @@ import ChatView from "./views/ChatView";
 import ParentView from "./views/ParentView";
 import LoginView from "./views/LoginView";
 import RegisterView from "./views/RegisterView";
+import GlassDashboard from "./views/GlassDashboard";
 
 // Import styles and API functions
 import { styles } from "./styles";
@@ -428,6 +429,9 @@ const App = () => {
             <button className="warning-button" onClick={() => setCurrentScreen('welcome')}>
               🏠 Back to Home
             </button>
+            <button className="success-button" onClick={() => setCurrentScreen('glass')}>
+              🎨 Glass Dashboard Demo
+            </button>
           </div>
           <div className="tab-container">
             <button className={`tab-nav ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
@@ -542,6 +546,10 @@ const App = () => {
             />
           )}
         </div>
+      )}
+
+      {currentScreen === 'glass' && (
+        <GlassDashboard onBack={() => setCurrentScreen('main')} />
       )}
     </div>
   );

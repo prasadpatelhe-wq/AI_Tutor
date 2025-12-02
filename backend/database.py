@@ -7,15 +7,16 @@ from sqlalchemy.orm import sessionmaker
 # Load .env variables
 load_dotenv()
 
-# ✅ Get database URL from .env file
-DATABASE_URL = os.getenv("DATABASE_URL")
-
-if not DATABASE_URL:
-    # Fallback for local dev if .env is missing or empty
-    DATABASE_URL = "sqlite:///./tutor.db"
+# Resolve database URL; default to a stable absolute path inside backend/
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_SQLITE_PATH = os.path.join(BASE_DIR, "tutor.db")
+DATABASE_URL = os.getenv("DATABASE_URL") or f"sqlite:///{DEFAULT_SQLITE_PATH}"
 
 # ✅ Create SQLAlchemy engine
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
+engine = create_engine(
+    DATABASE_URL,
+    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
+)
 
 # ✅ Create a configured session class
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

@@ -53,6 +53,7 @@ const LoginView = ({ onLoginSuccess, onNavigateToRegister }) => {
                     <p className="lede">
                         Sign in to unlock your streaks, rewards, and a tutor that adapts to every move you make.
                     </p>
+                    <div className="hero-bubble">Stay focused • Earn rewards</div>
                     <div className="pill-row">
                         <span className="pill">Adaptive pathing</span>
                         <span className="pill">Live quizzes</span>
