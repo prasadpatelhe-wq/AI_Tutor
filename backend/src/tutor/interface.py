@@ -13,7 +13,7 @@ from typing import Dict, List, Optional
 from langchain_community.vectorstores import FAISS
 from .framework import euriai_framework
 from .registry import create_agent, AGENT_CONFIGS
-from src.utils.euriai_embeddings import EuriaiEmbeddings
+from ..utils.euriai_embeddings import EuriaiEmbeddings
 
 CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_ENV_PATH = os.path.join(CURRENT_DIR, "..", "..", "..", ".env")

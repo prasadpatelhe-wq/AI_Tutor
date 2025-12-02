@@ -1,44 +1,38 @@
-"""
-API backend for the Agentic AI Tutor, replacing the Gradio UI.
-This exposes the core functionality via REST endpoints for a React frontend.
-"""
-import sys, os
+"""FastAPI backend for the Agentic AI Tutor React frontend."""
+import os
+import sys
+import logging
+import random
+import sqlite3
+from datetime import datetime
 
-# === Fix Python path issues ===
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))           # backend/
-ROOT_DIR = os.path.dirname(BASE_DIR)                            # project root
-SRC_DIR = os.path.join(BASE_DIR, "src")                         # backend/src/
-
-for path in [ROOT_DIR, BASE_DIR, SRC_DIR]:
-    if path not in sys.path:
-        sys.path.append(path)
-
-from backend.database import SessionLocal
-from backend.services.flashcard_service import save_flashcards_from_quiz, get_flashcards
-
-# -----------------------------------------------------------
-# Flashcard Endpoints
-# -----------------------------------------------------------
-
-from backend.services.progress_service import update_progress, get_due_flashcards
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from pydantic import BaseModel
-import random
-from datetime import datetime
-from src.tutor.interface import tutor_interface as AI_TUTOR
-from src.tutor.interface import tutor_interface
-from backend.database import SessionLocal
-from backend.routes.flashcards_router import router as flashcards_router
-import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from backend.routes.subjects_router import router as subjects_router
-from backend.routes.chapters_router import router as chapters_router
-from backend.routes.meta_router import router as meta_router
-from backend.routes.students_router import router as students_router
-import logging
-import sqlite3
+# Ensure project root is on the Python path when running as a script
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))           # backend/
+ROOT_DIR = os.path.dirname(BASE_DIR)                            # project root
+if ROOT_DIR not in sys.path:
+    sys.path.append(ROOT_DIR)
+
+from backend.app.schemas import (  # noqa: E402
+    ParentPinRequest,
+    VideoRequest,
+    QuizRequest,
+    QuizScoreRequest,
+    PerkBuyRequest,
+    RoadmapRequest,
+    ChatRequest,
+)
+from backend.database import SessionLocal  # noqa: E402
+from backend.routes.flashcards_router import router as flashcards_router  # noqa: E402
+from backend.routes.subjects_router import router as subjects_router  # noqa: E402
+from backend.routes.chapters_router import router as chapters_router  # noqa: E402
+from backend.routes.meta_router import router as meta_router  # noqa: E402
+from backend.routes.students_router import router as students_router  # noqa: E402
+from backend.services.flashcard_service import save_flashcards_from_quiz  # noqa: E402
+from backend.src.tutor.interface import tutor_interface as AI_TUTOR  # noqa: E402
+from backend.src.tutor.interface import tutor_interface  # noqa: E402
 
 # === Database Schema Migration ===
 def run_migrations():
@@ -72,8 +66,6 @@ def run_migrations():
         print(f"⚠️ Migration warning: {e}")
 
 run_migrations()
-
-logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="Euri AI Tutor API", version="2.0")
@@ -157,58 +149,9 @@ PERKS_SHOP = [
     {"name": "Music Mode 🎵", "cost": 60, "description": "Study with background music!"}
 ]
 
-# Pydantic models for requests
-class ParentPinRequest(BaseModel):
-    pin: str
-
-class VideoRequest(BaseModel):
-    subject: str
-
-class QuizRequest(BaseModel):
-    subject: str
-    grade_band: str
-    chapter_id: int
-    chapter_title: str
-    chapter_summary: str
-    num_questions: int = 5
-    difficulty: str = "basic"
-
-class FlashcardFetchRequest(BaseModel):
-    subject: str
-    chapter: str
-
-from typing import Optional
-
-class QuizScoreRequest(BaseModel):
-    answers: list[int]
-    correct_answers: list[int]
-    difficulty: str = "basic"
-    chapter_id: Optional[int] = None
-    subject_id: Optional[int] = None
-    student_id: Optional[int] = None
-
-class PerkBuyRequest(BaseModel):
-    perk_index: int
-
-class RoadmapRequest(BaseModel):
-    grade: str
-    board: str
-    subject: str
-
-class ChatRequest(BaseModel):
-    message: str
-    subject: str
-    grade: str
-
-class ProgressRequest(BaseModel):
-    student_id: int
-    flashcard_id: int
-    correct: bool
-
-# FastAPI app
+# Router registration
 app.include_router(flashcards_router)
 app.include_router(chapters_router)
-app.include_router(subjects_router)
 app.include_router(subjects_router)
 app.include_router(meta_router)
 app.include_router(students_router)
@@ -220,9 +163,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.include_router(flashcards_router)
-
 
 @app.get("/health")
 def health_check():

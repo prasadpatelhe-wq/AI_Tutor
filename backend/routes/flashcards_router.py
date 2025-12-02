@@ -3,29 +3,17 @@ Flashcards Router
 Handles endpoints for flashcards and student progress tracking.
 """
 
-import os, sys
 import logging
 from fastapi import APIRouter, HTTPException, Depends
-from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from backend.models.flashcard import Flashcard
-
-# --- Dynamically fix import paths ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))        # backend/routes/
-BACKEND_DIR = os.path.dirname(BASE_DIR)                      # backend/
-ROOT_DIR = os.path.dirname(BACKEND_DIR)                      # project root
-SRC_DIR = os.path.join(ROOT_DIR, "src")
-
-for path in [ROOT_DIR, BACKEND_DIR, SRC_DIR]:
-    if path not in sys.path:
-        sys.path.append(path)
-
-# --- Local Imports ---
+from backend.app.schemas import ProgressRequest, QuizRequest
 from backend.database import SessionLocal
+from backend.models.flashcard import Flashcard
+from backend.models.subject import Subject
+from backend.models.chapter import Chapter
 from backend.services.flashcard_service import save_flashcards_from_quiz, get_flashcards
 from backend.services.progress_service import update_progress, get_due_flashcards
-from src.tutor.interface import tutor_interface as AI_TUTOR
-from backend.schemas import QuizRequest  # ✅ Correct import (avoid circular import)
+from backend.src.tutor.interface import tutor_interface as AI_TUTOR
 
 # --- Setup ---
 logger = logging.getLogger(__name__)
@@ -38,18 +26,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-# --- Request Models ---
-class ProgressRequest(BaseModel):
-    student_id: int
-    flashcard_id: int
-    correct: bool
-
-
-class FlashcardFetchRequest(BaseModel):
-    subject: str
-    chapter: str
 
 
 # ----------------------------------------------------------
@@ -122,10 +98,6 @@ def api_get_flashcards_by_student(student_id: int, db: Session = Depends(get_db)
     Retrieve all flashcards associated with a specific student.
     Includes subject and chapter info for frontend display.
     """
-    from backend.models.flashcard import Flashcard
-    from backend.models.subject import Subject
-    from backend.models.chapter import Chapter
-
     flashcards = (
         db.query(Flashcard, Subject.name.label("subject_name"), Chapter.title.label("chapter_title"))
         .join(Subject, Flashcard.subject_id == Subject.id)

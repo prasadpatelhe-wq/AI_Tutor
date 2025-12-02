@@ -1,57 +1,7 @@
-from pydantic import BaseModel
-from typing import List
+"""
+Legacy import shim.
 
-
-# Pydantic models for requests
-class ParentPinRequest(BaseModel):
-    pin: str
-
-class VideoRequest(BaseModel):
-    subject: str
-
-class QuizRequest(BaseModel):
-    subject: str
-    grade_band: str
-    chapter_id: str
-    chapter_title: str
-    chapter_summary: str
-    num_questions: int = 5
-    difficulty: str = "basic"
-
-class FlashcardFetchRequest(BaseModel):
-    subject: str
-    chapter: str
-
-class QuizScoreRequest(BaseModel):
-    answers: list[int]
-    correct_answers: list[int]
-
-class PerkBuyRequest(BaseModel):
-    perk_index: int
-
-class RoadmapRequest(BaseModel):
-    grade: str
-    board: str
-    subject: str
-
-class ChatRequest(BaseModel):
-    message: str
-    subject: str
-    grade: str
-
-class ProgressRequest(BaseModel):
-    student_id: int
-    flashcard_id: int
-    correct: bool
-
-class StudentRegisterRequest(BaseModel):
-    name: str
-    email: str
-    password: str
-    grade_band: str
-    board: str = "CBSE"  # Default to CBSE if not provided
-
-class StudentLoginRequest(BaseModel):
-    email: str
-    password: str
-
+All schemas now live in backend.app.schemas; this file re-exports them to avoid
+breaking existing imports.
+"""
+from backend.app.schemas import *  # noqa: F401,F403
