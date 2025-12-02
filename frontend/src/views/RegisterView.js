@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { registerStudent } from '../api';
 import { fetchGrades, fetchBoards } from '../meta';
+import './LoginView.css';
+import './RegisterView.css';
 
 const RegisterView = ({ onRegisterSuccess, onNavigateToLogin }) => {
     const [formData, setFormData] = useState({
@@ -14,6 +16,7 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin }) => {
     const [loading, setLoading] = useState(false);
     const [grades, setGrades] = useState([]);
     const [boards, setBoards] = useState([]);
+    const [parallaxOffset, setParallaxOffset] = useState({ x: 0, y: 0 });
 
     useEffect(() => {
         const loadMeta = async () => {
@@ -21,7 +24,6 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin }) => {
                 const [g, b] = await Promise.all([fetchGrades(), fetchBoards()]);
                 setGrades(g.data);
                 setBoards(b.data);
-                // Set defaults if available
                 if (g.data.length > 0) setFormData(prev => ({ ...prev, grade_band: g.data[0].name }));
                 if (b.data.length > 0) setFormData(prev => ({ ...prev, board: b.data[0].name }));
             } catch (err) {
@@ -50,163 +52,182 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin }) => {
         }
     };
 
+    const handleParallax = (event) => {
+        const { innerWidth, innerHeight } = window;
+        const x = ((event.clientX - innerWidth / 2) / innerWidth) * 30;
+        const y = ((event.clientY - innerHeight / 2) / innerHeight) * 30;
+        setParallaxOffset({ x, y });
+    };
+
     return (
-        <div className="auth-container" style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100vh',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white'
-        }}>
-            <div style={{
-                background: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)',
-                padding: '2rem',
-                borderRadius: '15px',
-                boxShadow: '0 8px 32px 0 rgba(31, 38, 135, 0.37)',
-                width: '100%',
-                maxWidth: '400px'
-            }}>
-                <h2 style={{ textAlign: 'center', marginBottom: '1.5rem' }}>Join AI Tutor</h2>
-                {error && <div style={{ color: '#ff6b6b', marginBottom: '1rem', textAlign: 'center' }}>{error}</div>}
+        <div
+            className="login-page register-page"
+            onMouseMove={handleParallax}
+            style={{
+                '--parallax-x': `${parallaxOffset.x}px`,
+                '--parallax-y': `${parallaxOffset.y}px`,
+            }}
+        >
+            <div className="orb orb-one" />
+            <div className="orb orb-two" />
+            <div className="orb orb-three" />
+            <div className="grid-glow" />
+            <div className="gradient-veil" />
 
-                <form onSubmit={handleSubmit}>
-                    <div style={{ marginBottom: '1rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Full Name</label>
-                        <input
-                            type="text"
-                            name="name"
-                            value={formData.name}
-                            onChange={handleChange}
-                            required
-                            style={{
-                                width: '100%',
-                                padding: '0.8rem',
-                                borderRadius: '5px',
-                                border: 'none',
-                                background: 'rgba(255, 255, 255, 0.2)',
-                                color: 'white',
-                                outline: 'none'
-                            }}
-                        />
+            <div className="register-shell">
+                <section className="register-hero glass-panel">
+                    <p className="eyebrow">Create your AI Tutor passport</p>
+                    <h1>Shape your learning path from day one.</h1>
+                    <p className="lede">
+                        Tell us who you are and what you study. We will adapt lessons, rewards, and streaks to your grade, board, and pace.
+                    </p>
+                    <div className="progress-track">
+                        <div className="track-step">
+                            <span className="step-dot filled" />
+                            <div>
+                                <p className="eyebrow subtle">Step 1</p>
+                                <strong>Profile basics</strong>
+                                <p className="muted">Name, email, secure password</p>
+                            </div>
+                        </div>
+                        <div className="track-step">
+                            <span className={`step-dot ${formData.board ? 'filled' : ''}`} />
+                            <div>
+                                <p className="eyebrow subtle">Step 2</p>
+                                <strong>Board preference</strong>
+                                <p className="muted">CBSE, ICSE, State, and more</p>
+                            </div>
+                        </div>
+                        <div className="track-step">
+                            <span className={`step-dot ${formData.grade_band ? 'filled' : ''}`} />
+                            <div>
+                                <p className="eyebrow subtle">Step 3</p>
+                                <strong>Grade band</strong>
+                                <p className="muted">We tune videos and quizzes for you</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="badges-row">
+                        <span className="glow-pill">Smart recommendations</span>
+                        <span className="glow-pill">Daily streaks</span>
+                        <span className="glow-pill">Gamified rewards</span>
+                    </div>
+                </section>
+
+                <section className="register-card glass-panel">
+                    <div className="card-top">
+                        <div>
+                            <p className="eyebrow subtle">Join the classroom</p>
+                            <h2>Set up your account</h2>
+                        </div>
+                        <div className="status-chip">
+                            <span className="pulse-dot" />
+                            Profile preview
+                        </div>
                     </div>
 
-                    <div style={{ marginBottom: '1rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Email</label>
-                        <input
-                            type="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleChange}
-                            required
-                            style={{
-                                width: '100%',
-                                padding: '0.8rem',
-                                borderRadius: '5px',
-                                border: 'none',
-                                background: 'rgba(255, 255, 255, 0.2)',
-                                color: 'white',
-                                outline: 'none'
-                            }}
-                        />
+                    {error && <div className="alert">{error}</div>}
+
+                    <form className="login-form register-form" onSubmit={handleSubmit}>
+                        <label className="input-label" htmlFor="name">
+                            Full name
+                            <input
+                                id="name"
+                                className="input-control"
+                                type="text"
+                                name="name"
+                                value={formData.name}
+                                onChange={handleChange}
+                                required
+                                placeholder="Aarya Sharma"
+                            />
+                        </label>
+
+                        <label className="input-label" htmlFor="email">
+                            Email
+                            <input
+                                id="email"
+                                className="input-control"
+                                type="email"
+                                name="email"
+                                value={formData.email}
+                                onChange={handleChange}
+                                required
+                                placeholder="you@example.com"
+                            />
+                        </label>
+
+                        <label className="input-label" htmlFor="password">
+                            Password
+                            <input
+                                id="password"
+                                className="input-control"
+                                type="password"
+                                name="password"
+                                value={formData.password}
+                                onChange={handleChange}
+                                required
+                                placeholder="Create a strong password"
+                            />
+                        </label>
+
+                        <div className="two-up">
+                            <label className="input-label" htmlFor="board">
+                                Board
+                                <select
+                                    id="board"
+                                    name="board"
+                                    className="input-control select-control"
+                                    value={formData.board}
+                                    onChange={handleChange}
+                                    required
+                                >
+                                    <option value="" disabled>Select Board</option>
+                                    {boards.map(b => (
+                                        <option key={b.id} value={b.name}>{b.name}</option>
+                                    ))}
+                                </select>
+                            </label>
+
+                            <label className="input-label" htmlFor="grade_band">
+                                Grade
+                                <select
+                                    id="grade_band"
+                                    name="grade_band"
+                                    className="input-control select-control"
+                                    value={formData.grade_band}
+                                    onChange={handleChange}
+                                    required
+                                >
+                                    <option value="" disabled>Select Grade</option>
+                                    {grades.map(g => (
+                                        <option key={g.id} value={g.name}>{g.display || g.name}</option>
+                                    ))}
+                                </select>
+                            </label>
+                        </div>
+
+                        <div className="profile-preview">
+                            <div>
+                                <p className="eyebrow subtle">Quick preview</p>
+                                <strong>{formData.name || 'Your name here'}</strong>
+                                <p className="muted">{formData.grade_band || 'Grade'} • {formData.board || 'Board'}</p>
+                            </div>
+                            <div className="mini-chip">AI ready</div>
+                        </div>
+
+                        <button className="cta-btn" type="submit" disabled={loading}>
+                            {loading ? 'Creating your profile...' : 'Create account'}
+                        </button>
+                    </form>
+
+                    <div className="helper-row">
+                        Already have an account?{' '}
+                        <button className="link-btn" type="button" onClick={onNavigateToLogin}>
+                            Login here
+                        </button>
                     </div>
-
-                    <div style={{ marginBottom: '1rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Password</label>
-                        <input
-                            type="password"
-                            name="password"
-                            value={formData.password}
-                            onChange={handleChange}
-                            required
-                            style={{
-                                width: '100%',
-                                padding: '0.8rem',
-                                borderRadius: '5px',
-                                border: 'none',
-                                background: 'rgba(255, 255, 255, 0.2)',
-                                color: 'white',
-                                outline: 'none'
-                            }}
-                        />
-                    </div>
-
-                    <div style={{ marginBottom: '1rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Board</label>
-                        <select
-                            name="board"
-                            value={formData.board}
-                            onChange={handleChange}
-                            style={{
-                                width: '100%',
-                                padding: '0.8rem',
-                                borderRadius: '5px',
-                                border: 'none',
-                                background: 'rgba(255, 255, 255, 0.2)',
-                                color: 'white',
-                                outline: 'none'
-                            }}
-                        >
-                            <option value="" disabled>Select Board</option>
-                            {boards.map(b => (
-                                <option key={b.id} value={b.name} style={{ color: 'black' }}>{b.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div style={{ marginBottom: '1.5rem' }}>
-                        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Grade</label>
-                        <select
-                            name="grade_band"
-                            value={formData.grade_band}
-                            onChange={handleChange}
-                            style={{
-                                width: '100%',
-                                padding: '0.8rem',
-                                borderRadius: '5px',
-                                border: 'none',
-                                background: 'rgba(255, 255, 255, 0.2)',
-                                color: 'white',
-                                outline: 'none'
-                            }}
-                        >
-                            <option value="" disabled>Select Grade</option>
-                            {grades.map(g => (
-                                <option key={g.id} value={g.name} style={{ color: 'black' }}>{g.display || g.name}</option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        style={{
-                            width: '100%',
-                            padding: '1rem',
-                            borderRadius: '5px',
-                            border: 'none',
-                            background: '#4fd1c5',
-                            color: 'white',
-                            fontWeight: 'bold',
-                            cursor: loading ? 'not-allowed' : 'pointer',
-                            transition: 'background 0.3s'
-                        }}
-                    >
-                        {loading ? 'Registering...' : 'Register'}
-                    </button>
-                </form>
-
-                <div style={{ marginTop: '1rem', textAlign: 'center', fontSize: '0.9rem' }}>
-                    Already have an account?{' '}
-                    <span
-                        onClick={onNavigateToLogin}
-                        style={{ color: '#4fd1c5', cursor: 'pointer', textDecoration: 'underline' }}
-                    >
-                        Login here
-                    </span>
-                </div>
+                </section>
             </div>
         </div>
     );
