@@ -4,6 +4,7 @@ from backend.database import SessionLocal
 from backend.models.students import Student
 from backend.schemas import StudentRegisterRequest, StudentLoginRequest
 import hashlib
+import bcrypt
 
 router = APIRouter(prefix="/students", tags=["Students"])
 
@@ -15,7 +16,21 @@ def get_db():
         db.close()
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+def verify_password(password: str, stored_hash: str) -> bool:
+    """
+    Prefer bcrypt, but support legacy SHA-256 hashes for existing users.
+    """
+    if not stored_hash:
+        return False
+
+    try:
+        # bcrypt hashes are 60 chars and contain salt
+        return bcrypt.checkpw(password.encode(), stored_hash.encode())
+    except ValueError:
+        # If stored_hash is not a valid bcrypt hash, fall back to SHA-256
+        return hashlib.sha256(password.encode()).hexdigest() == stored_hash
 
 @router.post("/register")
 def register_student(req: StudentRegisterRequest, db: Session = Depends(get_db)):
@@ -51,11 +66,17 @@ def login_student(req: StudentLoginRequest, db: Session = Depends(get_db)):
         # For now, fail if no password set
         raise HTTPException(status_code=401, detail="Account setup incomplete. Please contact support.")
 
-    if student.password != hash_password(req.password):
+    if not verify_password(req.password, student.password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
         
     if not student.is_active:
         raise HTTPException(status_code=403, detail="Account is inactive. Please contact administrator.")
+
+    # If user was on legacy SHA-256 hash (64 hex chars), upgrade to bcrypt transparently
+    if len(student.password) == 64:
+        student.password = hash_password(req.password)
+        db.commit()
+        db.refresh(student)
         
     return {
         "message": "Login successful",

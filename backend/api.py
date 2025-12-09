@@ -42,6 +42,7 @@ from backend.routes.meta_router import router as meta_router
 from backend.routes.students_router import router as students_router
 from backend.routes.subchapters_router import router as subchapters_router
 import logging
+import hmac
 
 # === Database Schema Migration ===
 def run_migrations():
@@ -195,6 +196,9 @@ run_migrations()
 logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
+PARENT_PIN = os.getenv("PARENT_PIN")
+if not PARENT_PIN:
+    logger.warning("PARENT_PIN not set; parent verification endpoint will be disabled.")
 app = FastAPI(title="Euri AI Tutor API", version="2.0")
 
 # Game state management
@@ -353,7 +357,10 @@ def health_check():
 
 @app.post("/verify_parent")
 def api_verify_parent(req: ParentPinRequest):
-    if req.pin == "1234":
+    if not PARENT_PIN:
+        raise HTTPException(status_code=503, detail="Parent verification not configured.")
+
+    if hmac.compare_digest(req.pin, PARENT_PIN):
         game_state.parent_authenticated = True
         return {"success": True, "message": "✅ Parent access granted!"}
     return {"success": False, "message": "❌ Wrong PIN. Try again!"}

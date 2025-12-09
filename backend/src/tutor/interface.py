@@ -49,13 +49,16 @@ class AI_Tutor:
 
         # Load retriever if available
         if self.api_key and os.path.exists(vector_store_path):
+            allow_dangerous = os.environ.get("FAISS_ALLOW_DANGEROUS_DESERIALIZATION", "false").lower() == "true"
+            if allow_dangerous:
+                print("⚠️ FAISS dangerous deserialization ENABLED via FAISS_ALLOW_DANGEROUS_DESERIALIZATION")
             try:
                 print("🧠 Attempting to load FAISS index...")
                 embeddings = EuriaiEmbeddings(model="gemini-embedding-001")
                 vector_store = FAISS.load_local(
                     vector_store_path,
                     embeddings,
-                    allow_dangerous_deserialization=True
+                    allow_dangerous_deserialization=allow_dangerous
                 )
                 self.retriever = vector_store.as_retriever(search_kwargs={"k": 5})
                 print("✅ FAISS retriever loaded successfully!")

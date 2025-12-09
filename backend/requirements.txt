@@ -5,6 +5,7 @@ langchain-community>=0.0.20
 python-dotenv>=1.0.0
 requests>=2.31.0
 euriai>=0.1.0
+bcrypt>=4.1.2
 
 # PDF processing and text extraction
 PyPDF2>=3.0.0
