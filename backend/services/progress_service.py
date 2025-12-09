@@ -9,7 +9,7 @@ from backend.models.student_progress import StudentProgress
 from backend.models.flashcard import Flashcard
 
 
-def update_progress(student_id: int, flashcard_id: int, correct: bool, db: Session):
+def update_progress(student_id: str, flashcard_id: str, correct: bool, db: Session):
     """
     Updates progress for a flashcard after a student reviews it.
     """
@@ -51,7 +51,7 @@ def update_progress(student_id: int, flashcard_id: int, correct: bool, db: Sessi
     }
 
 
-def get_due_flashcards(student_id: int, db: Session):
+def get_due_flashcards(student_id: str, db: Session):
     """
     Returns all flashcards that are due for review today.
     """

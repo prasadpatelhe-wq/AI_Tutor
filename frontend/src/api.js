@@ -88,7 +88,7 @@ export const completeVideoWatching = async (subject, addCoins, setGameState, set
   }
 };
 
-export const generateQuiz = async (selectedDbChapter, userSubject, userGrade, setLoading, studentId) => {
+export const generateQuiz = async (selectedDbChapter, selectedDbSubchapter, dbSubchapters, userSubject, userGrade, setLoading, studentId) => {
   setLoading(prev => ({ ...prev, quiz: true }));
 
   try {
@@ -101,6 +101,9 @@ export const generateQuiz = async (selectedDbChapter, userSubject, userGrade, se
     const chapterResponse = await api.get(`/chapters/${selectedDbChapter}`);
     const chapter = chapterResponse.data;
 
+    // Locate chosen subchapter (already fetched list)
+    const subchapter = (dbSubchapters || []).find(sc => String(sc.id) === String(selectedDbSubchapter));
+
     // 2️⃣ Call backend
     const response = await api.post(`/generate_quiz?student_id=${studentId}`, {
       subject: userSubject,
@@ -108,6 +111,9 @@ export const generateQuiz = async (selectedDbChapter, userSubject, userGrade, se
       chapter_id: String(chapter.id),
       chapter_title: chapter.title || "",
       chapter_summary: chapter.summary || chapter.description || "",
+      subchapter_id: subchapter ? String(subchapter.id) : undefined,
+      subchapter_title: subchapter?.title || "",
+      subchapter_summary: subchapter?.description || "",
       num_questions: 5,
       difficulty: "basic", // This might be ignored by backend if it generates all, but good to keep
     });
@@ -286,7 +292,8 @@ export const getStudentScore = async (studentId) => {
 
 export const registerStudent = async (studentData) => {
   try {
-    const response = await api.post('/students/register', studentData);
+    const { confirmPassword, ...payload } = studentData; // drop confirmPassword before sending
+    const response = await api.post('/students/register', payload);
     return { success: true, data: response.data };
   } catch (error) {
     console.error('Registration error:', error);

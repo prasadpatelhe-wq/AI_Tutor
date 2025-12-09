@@ -1,13 +1,13 @@
 from backend.database import Base
-from sqlalchemy import Column, Integer, Text, ForeignKey, String
+from sqlalchemy import Column, Text, ForeignKey, String
 from sqlalchemy.orm import relationship
-
+import uuid
 
 class Question(Base):
     __tablename__ = "question"
 
-    id = Column(Integer, primary_key=True)
-    quiz_id = Column(Integer, ForeignKey("quiz.id"))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    quiz_id = Column(String(36), ForeignKey("quiz.id"))
 
     question_text = Column(Text)
     options = Column(Text)  # JSON string

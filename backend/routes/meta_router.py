@@ -4,6 +4,7 @@ from backend.database import SessionLocal
 from backend.models.grade import Grade
 from backend.models.board import Board
 from backend.models.subject import Subject
+from backend.models.language import Language
 
 router = APIRouter(prefix="/meta", tags=["Metadata"])
 
@@ -35,3 +36,9 @@ def get_boards(db: Session = Depends(get_db)):
 def get_subjects(db: Session = Depends(get_db)):
     subjects = db.query(Subject).all()
     return [{"id": s.id, "name": s.name} for s in subjects]
+
+
+@router.get("/languages")
+def get_languages(db: Session = Depends(get_db)):
+    langs = db.query(Language).all()
+    return [{"id": l.id, "code": l.code, "name": l.name, "direction": l.direction} for l in langs]

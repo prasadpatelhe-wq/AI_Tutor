@@ -1,6 +1,21 @@
-// Modern, Beautiful UI Styles
-export const styles = `
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Fredoka+One:wght@400&display=swap');
+/**
+ * Dynamic Theme-Aware Styles Generator
+ * 
+ * Generates CSS styles based on the current theme (kids, teen, mature)
+ */
+
+import { themes } from './themes';
+
+/**
+ * Generate dynamic styles based on theme
+ * @param {string} themeName - 'kids', 'teen', or 'mature'
+ * @returns {string} CSS styles
+ */
+export const getThemedStyles = (themeName = 'teen') => {
+    const theme = themes[themeName] || themes.teen;
+
+    return `
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&family=Fredoka+One:wght@400&family=Inter:wght@300;400;500;600;700&family=Comic+Neue:wght@400;700&family=Rajdhani:wght@400;500;600;700&display=swap');
 
 * {
     margin: 0;
@@ -9,12 +24,15 @@ export const styles = `
 }
 
 body {
-    font-family: 'Poppins', sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    font-family: ${theme.fonts.primary};
+    background: ${theme.colors.background};
     background-attachment: fixed;
     min-height: 100vh;
     line-height: 1.6;
     overflow-x: hidden;
+    font-size: ${theme.fonts.size.base};
+    color: ${theme.colors.text};
+    transition: all 0.5s ease;
 }
 
 .container {
@@ -24,7 +42,8 @@ body {
     position: relative;
 }
 
-/* Floating particles animation */
+/* Theme-specific background animations */
+${themeName === 'kids' ? `
 .container::before {
     content: '';
     position: fixed;
@@ -33,35 +52,108 @@ body {
     width: 100%;
     height: 100%;
     background: 
-        radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
-        radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.1) 1px, transparent 1px),
-        radial-gradient(circle at 40% 40%, rgba(255, 255, 255, 0.05) 2px, transparent 2px);
-    background-size: 50px 50px, 80px 80px, 120px 120px;
-    animation: float 20s ease-in-out infinite;
+        radial-gradient(circle at 20% 20%, rgba(255, 107, 157, 0.15) 2px, transparent 2px),
+        radial-gradient(circle at 80% 80%, rgba(78, 205, 196, 0.15) 2px, transparent 2px),
+        radial-gradient(circle at 50% 50%, rgba(255, 230, 109, 0.1) 3px, transparent 3px);
+    background-size: 60px 60px, 90px 90px, 120px 120px;
+    animation: floatKids 15s ease-in-out infinite;
     pointer-events: none;
     z-index: -1;
 }
 
-@keyframes float {
+@keyframes floatKids {
     0%, 100% { transform: translateY(0px) rotate(0deg); }
-    33% { transform: translateY(-20px) rotate(120deg); }
-    66% { transform: translateY(-10px) rotate(240deg); }
+    25% { transform: translateY(-15px) rotate(3deg); }
+    50% { transform: translateY(-25px) rotate(-3deg); }
+    75% { transform: translateY(-10px) rotate(2deg); }
 }
 
+/* Floating decorations for kids */
+.floating-decoration {
+    position: fixed;
+    font-size: 30px;
+    animation: floatEmoji 8s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+}
+
+@keyframes floatEmoji {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-30px) rotate(15deg); }
+}
+` : themeName === 'teen' ? `
+.container::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+        radial-gradient(circle at 20% 20%, rgba(102, 126, 234, 0.1) 1px, transparent 1px),
+        radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.1) 1px, transparent 1px);
+    background-size: 50px 50px, 80px 80px;
+    animation: floatTeen 20s ease-in-out infinite;
+    pointer-events: none;
+    z-index: -1;
+}
+
+@keyframes floatTeen {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-15px); }
+}
+
+/* Glow effect for teen theme */
+.glow-effect {
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.4);
+    animation: glowPulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes glowPulse {
+    0% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.4); }
+    100% { box-shadow: 0 0 40px rgba(102, 126, 234, 0.6); }
+}
+` : `
+/* Minimal background for mature theme */
+.container::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: -1;
+}
+`}
+
+/* Main Title */
 .main-title {
-    font-family: 'Fredoka One', cursive;
-    background: linear-gradient(135deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4, #ffeaa7);
+    font-family: ${theme.fonts.primary};
+    ${themeName === 'kids' ? `
+    background: linear-gradient(135deg, #ff6b9d, #4ecdc4, #ffe66d, #ff6b6b);
     background-size: 300% 300%;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    font-size: clamp(2rem, 5vw, 3.5rem);
-    font-weight: 800;
+    animation: gradientFlow 3s ease-in-out infinite;
+    ` : themeName === 'teen' ? `
+    background: linear-gradient(135deg, #667eea, #764ba2, #4fd1c5);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradientFlow 4s ease-in-out infinite;
+    ` : `
+    color: ${theme.colors.text};
+    `}
+    font-size: ${theme.fonts.size.title};
+    font-weight: 700;
     text-align: center;
     margin: 30px 0;
-    animation: gradientFlow 3s ease-in-out infinite;
-    text-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    letter-spacing: 2px;
+    letter-spacing: ${themeName === 'kids' ? '3px' : '1px'};
 }
 
 @keyframes gradientFlow {
@@ -71,25 +163,27 @@ body {
 
 /* Button Styles */
 .big-button {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-    border-radius: 25px;
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(135deg, #FF6B9D 0%, #FF8E53 100%)'
+            : themeName === 'teen'
+                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                : 'linear-gradient(135deg, #4A5568 0%, #2D3748 100%)'};
+    color: ${theme.colors.textOnPrimary};
+    border-radius: ${theme.borderRadius.pill};
     font-weight: 600;
-    font-size: 18px;
-    padding: 18px 35px;
+    font-size: ${theme.buttons.fontSize};
+    padding: ${theme.buttons.padding};
     border: none;
-    box-shadow: 
-        0 8px 32px rgba(102, 126, 234, 0.3),
-        inset 0 1px 0 rgba(255,255,255,0.2);
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: ${theme.shadows.button};
+    transition: all ${theme.animations.duration} ${theme.animations.timing};
     cursor: pointer;
     position: relative;
     overflow: hidden;
     margin: 10px;
-    min-width: 180px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    font-family: 'Poppins', sans-serif;
+    min-width: ${themeName === 'kids' ? '200px' : themeName === 'teen' ? '180px' : '160px'};
+    text-transform: ${themeName === 'mature' ? 'none' : 'uppercase'};
+    letter-spacing: ${theme.buttons.letterSpacing};
+    font-family: ${theme.fonts.primary};
 }
 
 .big-button::before {
@@ -99,7 +193,7 @@ body {
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,${themeName === 'kids' ? '0.3' : '0.2'}), transparent);
     transition: left 0.5s;
 }
 
@@ -108,76 +202,76 @@ body {
 }
 
 .big-button:hover {
-    transform: translateY(-4px) scale(1.05);
-    box-shadow: 
-        0 12px 40px rgba(102, 126, 234, 0.4),
-        inset 0 1px 0 rgba(255,255,255,0.3);
+    ${theme.animations.hover}
+    box-shadow: ${theme.shadows.hover};
 }
 
 .big-button:active {
-    transform: translateY(-2px) scale(1.02);
+    transform: translateY(-2px) scale(${themeName === 'kids' ? '1.02' : '1.01'});
 }
 
+/* Success Button */
 .success-button {
-    background: linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%);
-    color: white;
-    border-radius: 25px;
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(135deg, #7ED321 0%, #B8E986 100%)'
+            : themeName === 'teen'
+                ? 'linear-gradient(135deg, #48bb78 0%, #68d391 100%)'
+                : 'linear-gradient(135deg, #48BB78 0%, #276749 100%)'};
+    color: ${theme.colors.textOnPrimary};
+    border-radius: ${theme.borderRadius.pill};
     font-weight: 600;
-    font-size: 18px;
-    padding: 18px 35px;
+    font-size: ${theme.buttons.fontSize};
+    padding: ${theme.buttons.padding};
     border: none;
-    box-shadow: 
-        0 8px 32px rgba(86, 171, 47, 0.3),
-        inset 0 1px 0 rgba(255,255,255,0.2);
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 8px 25px rgba(72, 187, 120, 0.3);
+    transition: all ${theme.animations.duration} ${theme.animations.timing};
     cursor: pointer;
     margin: 10px;
-    min-width: 180px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    min-width: ${themeName === 'kids' ? '200px' : '180px'};
+    letter-spacing: ${theme.buttons.letterSpacing};
+    font-family: ${theme.fonts.primary};
 }
 
 .success-button:hover {
-    transform: translateY(-4px) scale(1.05);
-    box-shadow: 0 12px 40px rgba(86, 171, 47, 0.4);
+    ${theme.animations.hover}
+    box-shadow: 0 12px 35px rgba(72, 187, 120, 0.4);
 }
 
+/* Warning Button */
 .warning-button {
-    background: linear-gradient(135deg, #ff7f50 0%, #ff6b6b 100%);
-    color: white;
-    border-radius: 25px;
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(135deg, #FFB74D 0%, #FF8A50 100%)'
+            : themeName === 'teen'
+                ? 'linear-gradient(135deg, #ed8936 0%, #dd6b20 100%)'
+                : 'linear-gradient(135deg, #ED8936 0%, #C05621 100%)'};
+    color: ${theme.colors.textOnPrimary};
+    border-radius: ${theme.borderRadius.pill};
     font-weight: 600;
-    font-size: 18px;
-    padding: 18px 35px;
+    font-size: ${theme.buttons.fontSize};
+    padding: ${theme.buttons.padding};
     border: none;
-    box-shadow: 
-        0 8px 32px rgba(255, 107, 107, 0.3),
-        inset 0 1px 0 rgba(255,255,255,0.2);
-    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: 0 8px 25px rgba(237, 137, 54, 0.3);
+    transition: all ${theme.animations.duration} ${theme.animations.timing};
     cursor: pointer;
     margin: 10px;
-    min-width: 180px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    font-family: ${theme.fonts.primary};
 }
 
 .warning-button:hover {
-    transform: translateY(-4px) scale(1.05);
-    box-shadow: 0 12px 40px rgba(255, 107, 107, 0.4);
+    ${theme.animations.hover}
+    box-shadow: 0 12px 35px rgba(237, 137, 54, 0.4);
 }
 
 /* Card Styles */
 .kid-card {
-    background: rgba(255, 255, 255, 0.95);
+    background: ${theme.colors.cardBg};
     backdrop-filter: blur(20px);
-    border-radius: 25px;
-    padding: 30px;
+    border-radius: ${theme.borderRadius.large};
+    padding: ${themeName === 'kids' ? '35px' : themeName === 'teen' ? '30px' : '25px'};
     margin: 20px 10px;
-    box-shadow: 
-        0 20px 60px rgba(0,0,0,0.1),
-        inset 0 1px 0 rgba(255,255,255,0.8);
-    border: 1px solid rgba(255,255,255,0.2);
-    transition: all 0.4s ease;
+    box-shadow: ${theme.shadows.card};
+    border: 1px solid rgba(255,255,255,${themeName === 'mature' ? '0.05' : '0.2'});
+    transition: all ${theme.animations.duration} ease;
     position: relative;
     overflow: hidden;
 }
@@ -188,56 +282,64 @@ body {
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, #667eea, #764ba2);
-    border-radius: 25px 25px 0 0;
+    height: ${themeName === 'kids' ? '6px' : themeName === 'teen' ? '4px' : '2px'};
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(90deg, #FF6B9D, #4ECDC4, #FFE66D)'
+            : themeName === 'teen'
+                ? 'linear-gradient(90deg, #667eea, #764ba2)'
+                : theme.colors.accent};
+    border-radius: ${theme.borderRadius.large} ${theme.borderRadius.large} 0 0;
 }
 
 .kid-card:hover {
-    transform: translateY(-8px);
-    box-shadow: 
-        0 30px 80px rgba(0,0,0,0.15),
-        inset 0 1px 0 rgba(255,255,255,0.9);
+    transform: translateY(${themeName === 'kids' ? '-10px' : themeName === 'teen' ? '-6px' : '-3px'});
+    box-shadow: ${theme.shadows.hover};
 }
 
+/* Coin Display */
 .coin-display {
-    background: linear-gradient(135deg, #f7971e 0%, #ffd200 100%);
-    color: #8B4513;
-    font-size: 28px;
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)'
+            : themeName === 'teen'
+                ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+                : 'linear-gradient(135deg, #38B2AC 0%, #2C7A7B 100%)'};
+    color: ${themeName === 'kids' ? '#8B4513' : theme.colors.textOnPrimary};
+    font-size: ${themeName === 'kids' ? '28px' : themeName === 'teen' ? '24px' : '20px'};
     font-weight: 700;
-    padding: 20px 30px;
-    border-radius: 50px;
+    padding: ${themeName === 'kids' ? '20px 35px' : themeName === 'teen' ? '18px 30px' : '15px 25px'};
+    border-radius: ${theme.borderRadius.pill};
     text-align: center;
-    box-shadow: 
-        0 10px 30px rgba(247, 151, 30, 0.3),
-        inset 0 1px 0 rgba(255,255,255,0.3);
+    box-shadow: ${themeName === 'kids'
+            ? '0 10px 30px rgba(255, 215, 0, 0.4)'
+            : theme.shadows.button};
     position: relative;
     overflow: hidden;
-    animation: coinGlow 2s ease-in-out infinite alternate;
-    font-family: 'Fredoka One', cursive;
+    ${themeName === 'kids' ? 'animation: coinGlow 2s ease-in-out infinite alternate;' : ''}
+    font-family: ${theme.fonts.primary};
     letter-spacing: 2px;
 }
 
 @keyframes coinGlow {
-    0% { box-shadow: 0 10px 30px rgba(247, 151, 30, 0.3); }
-    100% { box-shadow: 0 10px 40px rgba(247, 151, 30, 0.5); }
+    0% { box-shadow: 0 10px 30px rgba(255, 215, 0, 0.4); }
+    100% { box-shadow: 0 15px 45px rgba(255, 215, 0, 0.6); }
 }
 
 /* Tab Navigation */
 .tab-nav {
-    background: rgba(255, 255, 255, 0.1);
+    background: ${themeName === 'mature' ? 'transparent' : 'rgba(255, 255, 255, 0.1)'};
     backdrop-filter: blur(10px);
-    color: white;
-    font-size: 16px;
+    color: ${theme.colors.text};
+    font-size: ${themeName === 'kids' ? '17px' : themeName === 'teen' ? '15px' : '14px'};
     font-weight: 600;
-    border-radius: 20px 20px 0 0;
-    padding: 15px 25px;
+    border-radius: ${theme.borderRadius.medium} ${theme.borderRadius.medium} 0 0;
+    padding: ${themeName === 'kids' ? '18px 28px' : '15px 22px'};
     cursor: pointer;
-    transition: all 0.3s ease;
-    margin: 0 5px;
-    border: 1px solid rgba(255,255,255,0.1);
+    transition: all ${theme.animations.duration} ease;
+    margin: 0 ${themeName === 'kids' ? '8px' : '5px'};
+    border: ${themeName === 'mature' ? '1px solid rgba(255,255,255,0.1)' : '1px solid rgba(255,255,255,0.1)'};
     position: relative;
     overflow: hidden;
+    font-family: ${theme.fonts.primary};
 }
 
 .tab-nav::before {
@@ -246,10 +348,14 @@ body {
     bottom: 0;
     left: 0;
     width: 100%;
-    height: 3px;
-    background: linear-gradient(90deg, #667eea, #764ba2);
+    height: ${themeName === 'kids' ? '4px' : '3px'};
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(90deg, #FF6B9D, #4ECDC4)'
+            : themeName === 'teen'
+                ? 'linear-gradient(90deg, #667eea, #764ba2)'
+                : theme.colors.accent};
     transform: scaleX(0);
-    transition: transform 0.3s ease;
+    transition: transform ${theme.animations.duration} ease;
 }
 
 .tab-nav:hover::before {
@@ -257,138 +363,70 @@ body {
 }
 
 .tab-nav.active {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, ${themeName === 'mature' ? '0.1' : '0.2'});
     backdrop-filter: blur(15px);
-    box-shadow: 0 8px 32px rgba(255,255,255,0.1);
+    box-shadow: ${themeName === 'mature' ? 'none' : '0 8px 32px rgba(255,255,255,0.1)'};
 }
 
 .tab-nav.active::before {
     transform: scaleX(1);
 }
 
+/* Quiz Card */
 .quiz-card {
-    background: linear-gradient(135deg, rgba(255, 228, 225, 0.9), rgba(255, 240, 245, 0.9));
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(135deg, rgba(255, 228, 225, 0.95), rgba(255, 240, 245, 0.95))'
+            : themeName === 'teen'
+                ? 'linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1))'
+                : 'rgba(255, 255, 255, 0.05)'};
     backdrop-filter: blur(10px);
-    border-radius: 20px;
-    padding: 25px;
+    border-radius: ${theme.borderRadius.medium};
+    padding: ${themeName === 'kids' ? '30px' : '25px'};
     margin: 15px 0;
-    box-shadow: 0 10px 40px rgba(255, 105, 180, 0.1);
-    border-left: 6px solid #ff69b4;
-    transition: all 0.3s ease;
+    box-shadow: ${themeName === 'kids'
+            ? '0 10px 40px rgba(255, 105, 180, 0.15)'
+            : theme.shadows.card};
+    border-left: ${themeName === 'kids' ? '8px' : '6px'} solid ${theme.colors.primary};
+    transition: all ${theme.animations.duration} ease;
     cursor: pointer;
 }
 
 .quiz-card:hover {
-    transform: translateX(10px);
-    box-shadow: 0 15px 50px rgba(255, 105, 180, 0.2);
+    transform: translateX(${themeName === 'kids' ? '15px' : '10px'});
+    box-shadow: ${theme.shadows.hover};
 }
-
-.attention-alert {
-    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
-    color: white;
-    border-radius: 20px;
-    padding: 30px;
-    text-align: center;
-    font-size: 20px;
-    font-weight: 600;
-    animation: alertPulse 2s infinite;
-    box-shadow: 0 15px 50px rgba(255, 107, 107, 0.3);
-    border: 2px solid rgba(255,255,255,0.2);
-}
-
-@keyframes alertPulse {
-    0%, 100% { 
-        transform: scale(1);
-        box-shadow: 0 15px 50px rgba(255, 107, 107, 0.3);
-    }
-    50% { 
-        transform: scale(1.05);
-        box-shadow: 0 20px 60px rgba(255, 107, 107, 0.5);
-    }
-}
-
-.parent-lock {
-    background: linear-gradient(135deg, #8B4513, #A0522D);
-    color: white;
-    border-radius: 15px;
-    padding: 20px;
-    font-weight: 600;
-    box-shadow: 0 10px 30px rgba(139, 69, 19, 0.3);
-    transition: all 0.3s ease;
-}
-
-.parent-lock:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 15px 40px rgba(139, 69, 19, 0.4);
-}
-
-.video-container {
-    border-radius: 25px;
-    overflow: hidden;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-    background: #000;
-    height: 450px;
-    position: relative;
-    border: 3px solid rgba(255,255,255,0.1);
-}
-
-.webcam-preview {
-    width: 250px;
-    height: 180px;
-    border-radius: 20px;
-    border: 3px solid rgba(102, 126, 234, 0.5);
-    background: linear-gradient(135deg, #000 0%, #333 100%);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    text-align: center;
-    font-weight: 600;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-    margin: 20px auto;
-    transition: all 0.3s ease;
-}
-
-.webcam-preview:hover {
-    transform: scale(1.05);
-    border-color: rgba(102, 126, 234, 0.8);
-}
-
-/* Typography */
-h1, h2, h3 {
-    color: white;
-    font-weight: 700;
-    text-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    margin-bottom: 20px;
-    font-family: 'Poppins', sans-serif;
-}
-
-h1 { font-size: clamp(2rem, 4vw, 3rem); }
-h2 { font-size: clamp(1.5rem, 3vw, 2.5rem); }
-h3 { font-size: clamp(1.2rem, 2.5vw, 2rem); }
 
 /* Input Styles */
 input, select {
-    background: rgba(255, 255, 255, 0.9);
-    border: 2px solid rgba(102, 126, 234, 0.3);
-    border-radius: 15px;
-    padding: 15px 20px;
-    font-size: 16px;
+    background: ${themeName === 'mature'
+            ? 'rgba(255, 255, 255, 0.1)'
+            : 'rgba(255, 255, 255, 0.9)'};
+    border: 2px solid ${themeName === 'mature'
+            ? 'rgba(255, 255, 255, 0.2)'
+            : 'rgba(102, 126, 234, 0.3)'};
+    border-radius: ${theme.borderRadius.medium};
+    padding: ${themeName === 'kids' ? '18px 22px' : '15px 20px'};
+    font-size: ${theme.fonts.size.base};
     font-weight: 500;
     width: 100%;
     margin: 10px 0;
-    transition: all 0.3s ease;
-    font-family: 'Poppins', sans-serif;
+    transition: all ${theme.animations.duration} ease;
+    font-family: ${theme.fonts.primary};
+    color: ${themeName === 'mature' ? theme.colors.text : '#333'};
 }
 
 input:focus, select:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+    border-color: ${theme.colors.primary};
+    box-shadow: 0 0 20px ${themeName === 'kids'
+            ? 'rgba(255, 107, 157, 0.3)'
+            : themeName === 'teen'
+                ? 'rgba(102, 126, 234, 0.3)'
+                : 'rgba(56, 178, 172, 0.3)'};
     transform: translateY(-2px);
 }
 
-/* Layout Improvements */
+/* Layout */
 .header-section {
     display: flex;
     justify-content: space-between;
@@ -401,19 +439,21 @@ input:focus, select:focus {
 .tab-container {
     display: flex;
     flex-wrap: wrap;
-    gap: 10px;
+    gap: ${themeName === 'kids' ? '12px' : '10px'};
     margin-bottom: 30px;
     justify-content: center;
 }
 
 .content-section {
-    background: rgba(255, 255, 255, 0.1);
+    background: ${themeName === 'mature'
+            ? 'rgba(255, 255, 255, 0.03)'
+            : 'rgba(255, 255, 255, 0.1)'};
     backdrop-filter: blur(20px);
-    border-radius: 25px;
-    padding: 40px;
+    border-radius: ${theme.borderRadius.large};
+    padding: ${themeName === 'kids' ? '45px' : '40px'};
     margin: 20px 0;
-    border: 1px solid rgba(255,255,255,0.2);
-    box-shadow: 0 20px 60px rgba(0,0,0,0.1);
+    border: 1px solid rgba(255,255,255,${themeName === 'mature' ? '0.05' : '0.2'});
+    box-shadow: ${theme.shadows.card};
 }
 
 .button-group {
@@ -424,13 +464,16 @@ input:focus, select:focus {
     margin: 20px 0;
 }
 
+/* Chat Styles */
 .chat-container {
     height: 400px;
     overflow-y: auto;
-    border: 2px solid rgba(255,255,255,0.2);
-    border-radius: 20px;
+    border: 2px solid rgba(255,255,255,${themeName === 'mature' ? '0.1' : '0.2'});
+    border-radius: ${theme.borderRadius.medium};
     padding: 20px;
-    background: rgba(255,255,255,0.05);
+    background: ${themeName === 'mature'
+            ? 'rgba(0, 0, 0, 0.2)'
+            : 'rgba(255,255,255,0.05)'};
     backdrop-filter: blur(10px);
     margin: 20px 0;
 }
@@ -438,22 +481,109 @@ input:focus, select:focus {
 .chat-message {
     margin: 15px 0;
     padding: 15px 20px;
-    border-radius: 20px;
+    border-radius: ${theme.borderRadius.medium};
     max-width: 80%;
     word-wrap: break-word;
+    font-size: ${theme.fonts.size.base};
 }
 
 .chat-message.user {
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    color: white;
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(135deg, #FF6B9D, #FF8E53)'
+            : themeName === 'teen'
+                ? 'linear-gradient(135deg, #667eea, #764ba2)'
+                : theme.colors.primary};
+    color: ${theme.colors.textOnPrimary};
     margin-left: auto;
     text-align: right;
 }
 
 .chat-message.assistant {
-    background: rgba(255,255,255,0.9);
-    color: #333;
+    background: ${themeName === 'mature'
+            ? 'rgba(255, 255, 255, 0.1)'
+            : 'rgba(255,255,255,0.9)'};
+    color: ${themeName === 'mature' ? theme.colors.text : '#333'};
     margin-right: auto;
+}
+
+/* Typography */
+h1, h2, h3 {
+    color: ${theme.colors.text};
+    font-weight: 700;
+    text-shadow: ${themeName === 'mature' ? 'none' : '0 2px 10px rgba(0,0,0,0.2)'};
+    margin-bottom: 20px;
+    font-family: ${theme.fonts.primary};
+}
+
+h1 { font-size: ${theme.fonts.size.title}; }
+h2 { font-size: ${theme.fonts.size.xlarge}; }
+h3 { font-size: ${theme.fonts.size.large}; }
+
+/* Video Container */
+.video-container {
+    border-radius: ${theme.borderRadius.large};
+    overflow: hidden;
+    box-shadow: ${theme.shadows.card};
+    background: #000;
+    height: 450px;
+    position: relative;
+    border: ${themeName === 'kids' ? '4px' : '3px'} solid rgba(255,255,255,${themeName === 'mature' ? '0.05' : '0.1'});
+}
+
+/* Attention Alert */
+.attention-alert {
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(135deg, #FF6B9D, #FF5252)'
+            : 'linear-gradient(135deg, #fc8181, #f56565)'};
+    color: ${theme.colors.textOnPrimary};
+    border-radius: ${theme.borderRadius.medium};
+    padding: ${themeName === 'kids' ? '35px' : '30px'};
+    text-align: center;
+    font-size: ${themeName === 'kids' ? '22px' : '20px'};
+    font-weight: 600;
+    animation: alertPulse 2s infinite;
+    box-shadow: 0 15px 50px rgba(255, 107, 107, 0.3);
+    border: 2px solid rgba(255,255,255,0.2);
+}
+
+@keyframes alertPulse {
+    0%, 100% { 
+        transform: scale(1);
+        box-shadow: 0 15px 50px rgba(255, 107, 107, 0.3);
+    }
+    50% { 
+        transform: scale(${themeName === 'kids' ? '1.05' : '1.02'});
+        box-shadow: 0 20px 60px rgba(255, 107, 107, 0.5);
+    }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255,255,255,0.1);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(135deg, #FF6B9D, #4ECDC4)'
+            : themeName === 'teen'
+                ? 'linear-gradient(135deg, #667eea, #764ba2)'
+                : theme.colors.accent};
+    border-radius: 4px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in {
+    animation: fadeIn 0.6s ease-out;
 }
 
 /* Responsive Design */
@@ -463,12 +593,12 @@ input:focus, select:focus {
     }
     
     .main-title {
-        font-size: 2rem;
+        font-size: calc(${theme.fonts.size.title} * 0.7);
         margin: 20px 0;
     }
     
     .big-button, .success-button, .warning-button {
-        font-size: 16px;
+        font-size: calc(${theme.buttons.fontSize} * 0.9);
         padding: 15px 25px;
         min-width: 150px;
     }
@@ -488,7 +618,7 @@ input:focus, select:focus {
     }
     
     .tab-nav {
-        padding: 12px 20px;
+        padding: 12px 18px;
         font-size: 14px;
     }
     
@@ -507,76 +637,17 @@ input:focus, select:focus {
         align-items: center;
     }
     
-    .webcam-preview {
-        width: 200px;
-        height: 150px;
-    }
-    
     .video-container {
         height: 300px;
     }
 }
 
-@media (max-width: 480px) {
-    .main-title {
-        font-size: 1.5rem;
-    }
-    
-    .big-button, .success-button, .warning-button {
-        font-size: 14px;
-        padding: 12px 20px;
-        min-width: 120px;
-    }
-    
-    .coin-display {
-        font-size: 18px;
-        padding: 12px 16px;
-    }
-    
-    .content-section {
-        padding: 20px;
-    }
-    
-    .kid-card {
-        padding: 15px;
-    }
-}
-
-/* Scrollbar Styling */
-::-webkit-scrollbar {
-    width: 8px;
-}
-
-::-webkit-scrollbar-track {
-    background: rgba(255,255,255,0.1);
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb {
-    background: linear-gradient(135deg, #667eea, #764ba2);
-    border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(135deg, #764ba2, #667eea);
-}
-
-/* Loading Animation */
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.fade-in {
-    animation: fadeIn 0.6s ease-out;
-}
-
-/* Flashcard Flip Animation */
+/* Flashcard styles (theme-aware) */
 .flashcard-container {
     perspective: 1000px;
     cursor: pointer;
     width: 100%;
-    height: 300px; /* Fixed height for consistency */
+    height: 300px;
 }
 
 .flashcard-inner {
@@ -598,11 +669,9 @@ input:focus, select:focus {
     height: 100%;
     -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
-    border-radius: 25px;
+    border-radius: ${theme.borderRadius.large};
     padding: 30px;
-    box-shadow: 
-        0 20px 60px rgba(0,0,0,0.1),
-        inset 0 1px 0 rgba(255,255,255,0.8);
+    box-shadow: ${theme.shadows.card};
     border: 1px solid rgba(255,255,255,0.2);
     display: flex;
     flex-direction: column;
@@ -611,7 +680,7 @@ input:focus, select:focus {
 }
 
 .flashcard-front {
-    background: rgba(255, 255, 255, 0.95);
+    background: ${theme.colors.cardBg};
     backdrop-filter: blur(20px);
 }
 
@@ -622,110 +691,24 @@ input:focus, select:focus {
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, #667eea, #764ba2);
-    border-radius: 25px 25px 0 0;
+    background: ${themeName === 'kids'
+            ? 'linear-gradient(90deg, #FF6B9D, #4ECDC4, #FFE66D)'
+            : themeName === 'teen'
+                ? 'linear-gradient(90deg, #667eea, #764ba2)'
+                : theme.colors.accent};
+    border-radius: ${theme.borderRadius.large} ${theme.borderRadius.large} 0 0;
 }
 
 .flashcard-back {
-    background: linear-gradient(135deg, #fff 0%, #f0f2f5 100%);
+    background: ${themeName === 'mature'
+            ? 'rgba(255, 255, 255, 0.1)'
+            : 'linear-gradient(135deg, #fff 0%, #f0f2f5 100%)'};
     transform: rotateY(180deg);
-    border: 2px solid #667eea;
+    border: 2px solid ${theme.colors.primary};
+    color: ${themeName === 'mature' ? theme.colors.text : '#333'};
 }
 
-/* Swipe Animations */
-@keyframes slideInRight {
-    from { transform: translateX(100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes slideInLeft {
-    from { transform: translateX(-100%); opacity: 0; }
-    to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes slideOutLeft {
-    from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(-100%); opacity: 0; }
-}
-
-@keyframes slideOutRight {
-    from { transform: translateX(0); opacity: 1; }
-    to { transform: translateX(100%); opacity: 0; }
-}
-
-.slide-in-right {
-    animation: slideInRight 0.3s ease-out forwards;
-}
-
-.slide-in-left {
-    animation: slideInLeft 0.3s ease-out forwards;
-}
-
-.slide-out-left {
-    animation: slideOutLeft 0.3s ease-out forwards;
-}
-
-.slide-out-right {
-    animation: slideOutRight 0.3s ease-out forwards;
-}
-
-.flashcard-wrapper {
-    position: relative;
-    width: 100%;
-    max-width: 500px; /* Increased slightly for arrows */
-    margin: 0 auto;
-    height: 300px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.nav-arrow {
-    position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
-    color: white;
-    font-size: 2rem;
-    padding: 10px 15px;
-    border-radius: 50%;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    z-index: 10;
-    backdrop-filter: blur(5px);
-}
-
-.nav-arrow:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.4);
-    transform: translateY(-50%) scale(1.1);
-}
-
-.nav-arrow:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-}
-
-.nav-arrow.left {
-    left: -60px;
-}
-
-.nav-arrow.right {
-    right: -60px;
-}
-
-@media (max-width: 600px) {
-    .nav-arrow.left {
-        left: 0;
-    }
-    .nav-arrow.right {
-        right: 0;
-    }
-    .flashcard-wrapper {
-        padding: 0 40px;
-    }
-}
-
+/* Flashcard stack and navigation */
 .flashcard-stack {
     position: relative;
     width: 100%;
@@ -734,79 +717,48 @@ input:focus, select:focus {
     margin: 0 auto;
 }
 
-.flashcard-card {
+.nav-arrow {
     position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    transition: transform 0.35s ease, opacity 0.35s ease, box-shadow 0.35s ease;
-    pointer-events: none;
+    top: 50%;
+    transform: translateY(-50%);
+    background: ${themeName === 'kids'
+            ? 'rgba(255, 107, 157, 0.3)'
+            : 'rgba(255, 255, 255, 0.2)'};
+    border: none;
+    color: ${theme.colors.text};
+    font-size: ${themeName === 'kids' ? '2.5rem' : '2rem'};
+    padding: 10px 15px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all ${theme.animations.duration} ease;
+    z-index: 10;
+    backdrop-filter: blur(5px);
 }
 
-.flashcard-card.card-top {
-    transform: translateY(0) scale(1);
-    z-index: 4;
-    opacity: 1;
-    pointer-events: auto;
+.nav-arrow:hover:not(:disabled) {
+    background: ${themeName === 'kids'
+            ? 'rgba(255, 107, 157, 0.5)'
+            : 'rgba(255, 255, 255, 0.4)'};
+    transform: translateY(-50%) scale(1.1);
 }
 
-.flashcard-card.card-middle {
-    transform: translateY(20px) scale(0.97);
-    z-index: 3;
-    opacity: 0.9;
+.nav-arrow:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
 }
 
-.flashcard-card.card-back {
-    transform: translateY(40px) scale(0.94);
-    z-index: 2;
-    opacity: 0.8;
-}
-
-.flashcard-card.card-prev {
-    transform: translate(-60%, -10%) rotate(-4deg) scale(0.95);
-    opacity: 0;
-    z-index: 1;
-}
-
-.flashcard-card.card-hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
-.flashcard-card.swipe-left {
-    transform: translate(-140%, -30px) rotate(-8deg);
-    opacity: 0;
-}
-
-.flashcard-card.push-right {
-    transform: translate(140%, -20px) rotate(8deg);
-    opacity: 0;
-}
-
-.flashcard-card.card-prev.incoming {
-    transform: translateY(0) scale(1);
-    opacity: 1;
-    z-index: 5;
-}
-
-.flashcard-card::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 25px;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.12);
-    pointer-events: none;
-}
-
-.flashcard-card.card-top::after {
-    box-shadow: 0 25px 70px rgba(0,0,0,0.18);
-}
+.nav-arrow.left { left: -60px; }
+.nav-arrow.right { right: -60px; }
 
 @media (max-width: 600px) {
-    .flashcard-stack {
-        height: 280px;
-    }
+    .nav-arrow.left { left: 0; }
+    .nav-arrow.right { right: 0; }
+    .flashcard-wrapper { padding: 0 40px; }
 }
 `;
+};
 
+// Export default styles (teen theme as fallback)
+export const styles = getThemedStyles('teen');
 
+export default getThemedStyles;

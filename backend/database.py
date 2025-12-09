@@ -27,4 +27,4 @@ Base = declarative_base()
 # Note: We use string imports inside models to avoid circular deps, but here we import the class to register it.
 # However, for Alembic/create_all to work, we just need Base to know about them.
 # Importing the module is usually enough if the class inherits from Base.
-from backend.models.scorecard import Scorecard
+# from backend.models.scorecard import Scorecard

@@ -30,6 +30,7 @@ def register_student(req: StudentRegisterRequest, db: Session = Depends(get_db))
         password=hash_password(req.password),
         grade_band=req.grade_band,
         board=req.board,
+        medium=req.medium,
         is_active=1 # Default to active
     )
     db.add(new_student)
@@ -68,7 +69,7 @@ def login_student(req: StudentLoginRequest, db: Session = Depends(get_db)):
     }
 
 @router.post("/{student_id}/toggle_active")
-def toggle_student_active(student_id: int, db: Session = Depends(get_db)):
+def toggle_student_active(student_id: str, db: Session = Depends(get_db)):
     student = db.query(Student).filter(Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")

@@ -32,9 +32,11 @@ def save_flashcards_from_quiz(
         quiz_data: dict,
         subject_name: str,
         chapter_title: str,
+        chapter_summary: str,
         db: Session,
-        student_id: int = None,
-        chapter_id: int = None  # ✅ Added chapter_id
+        student_id: str | None = None,
+        chapter_id: str | None = None,  # ✅ Added chapter_id
+        subchapter_id: str | None = None,
 ):
     """
     Saves quiz questions as flashcards.
@@ -75,11 +77,10 @@ def save_flashcards_from_quiz(
             "Do not auto-create — please add manually."
         )
 
-    # 4️⃣ Create quiz record (this is fine)
+    # 4️⃣ Create quiz record (schema has no grade_band column)
     quiz = Quiz(
         subject_id=subject.id,
         chapter_id=chapter.id,
-        grade_band=quiz_data.get("grade_band", ""),
         difficulty=quiz_data.get("difficulty", "basic")
     )
     db.add(quiz)
@@ -98,6 +99,7 @@ def save_flashcards_from_quiz(
 
         # Save Question
         question = Question(
+            quiz_id=quiz.id,
             question_text=q.get("question_text"),
             options=json.dumps(options),
             correct_option=correct_option or "",
@@ -116,6 +118,7 @@ def save_flashcards_from_quiz(
             explanation=q.get("explanation", ""),
             subject_id=subject.id,
             chapter_id=chapter.id,  # 👉 IMPORTANT
+            subchapter_id=subchapter_id,
             difficulty=quiz_data.get("difficulty", "basic"),
             student_id=student_id
         )

@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useMemo } from "react";
 import FlashcardView from "./FlashcardView";
 import { SyllabusContext } from "./SyllabusContext";
 import { fetchSubjects } from "./meta";
@@ -7,6 +7,7 @@ import { fetchSubjects } from "./meta";
 import WelcomeView from "./views/WelcomeView";
 import SelectionView from "./views/SelectionView";
 import ChapterSelectionView from "./views/ChapterSelectionView";
+import SubchapterSelectionView from "./views/SubchapterSelectionView";
 import DashboardView from "./views/DashboardView";
 import VideoView from "./views/VideoView";
 import QuizView from "./views/QuizView";
@@ -16,8 +17,10 @@ import ParentView from "./views/ParentView";
 import LoginView from "./views/LoginView";
 import RegisterView from "./views/RegisterView";
 
-// Import styles and API functions
-import { styles } from "./styles";
+// Import theme system and dynamic styles
+import { ThemeProvider, useTheme } from "./ThemeContext";
+import { getThemeFromGrade, getThemeNameFromGrade } from "./themes";
+import getThemedStyles from "./styles";
 import {
   verifyParentPin as apiVerifyParentPin,
   logoutParent as apiLogoutParent,
@@ -91,7 +94,11 @@ const App = () => {
     fetchChaptersFromDB,
     dbChapters,
     selectedDbChapter,
-    setSelectedDbChapter
+    setSelectedDbChapter,
+    fetchSubchaptersFromDB,
+    dbSubchapters,
+    selectedDbSubchapter,
+    setSelectedDbSubchapter,
   } = useContext(SyllabusContext);
 
   // Loading States
@@ -103,6 +110,19 @@ const App = () => {
     parent: false,
     perk: false,
   });
+
+  // Compute theme based on student's grade
+  const currentThemeName = useMemo(() => {
+    return getThemeNameFromGrade(userGrade || currentStudent?.grade_band);
+  }, [userGrade, currentStudent?.grade_band]);
+
+  const themedStyles = useMemo(() => {
+    return getThemedStyles(currentThemeName);
+  }, [currentThemeName]);
+
+  const currentTheme = useMemo(() => {
+    return getThemeFromGrade(userGrade || currentStudent?.grade_band);
+  }, [userGrade, currentStudent?.grade_band]);
 
   // Front page subject loader
   useEffect(() => {
@@ -217,7 +237,15 @@ const App = () => {
   };
 
   const generateQuiz = async () => {
-    return await apiGenerateQuiz(selectedDbChapter, userSubject, userGrade, setLoading, currentStudent?.id);
+    return await apiGenerateQuiz(
+      selectedDbChapter,
+      selectedDbSubchapter,
+      dbSubchapters,
+      userSubject,
+      userGrade,
+      setLoading,
+      currentStudent?.id
+    );
   };
 
   const calculateQuizScore = async (answers, questions, passedAddCoins, passedSetGameState, difficulty, chapterId, subjectId) => {
@@ -288,6 +316,17 @@ const App = () => {
     }
   };
 
+  const handleChapterContinue = async () => {
+    if (!selectedDbChapter) return;
+    try {
+      await fetchSubchaptersFromDB(selectedDbChapter);
+      setCurrentScreen("selectSubchapter");
+    } catch (error) {
+      console.error("Subchapter fetch error:", error);
+      setSelectionStatus("❌ Could not load subchapters.");
+    }
+  };
+
   const loadVideoForSubject = async () => {
     const video = await getVideoForSubject(userSubject);
     setVideoTitle(`Now Playing: ${video.title}`);
@@ -315,6 +354,10 @@ const App = () => {
   };
 
   const startQuizSession = async () => {
+    if (!selectedDbSubchapter) {
+      console.warn("No subchapter selected for quiz.");
+      return null;
+    }
     const data = await generateQuiz();
     const basicQuestions = data?.basic || [];
     setQuizQuestions(basicQuestions);
@@ -374,177 +417,248 @@ const App = () => {
     }
   }
 
-  // Render Main App
+  // Render Main App with Theme
   return (
-    <div className="container fade-in">
-      <style>{styles}</style>
+    <ThemeProvider gradeBand={userGrade || currentStudent?.grade_band}>
+      <div className={`container fade-in theme-${currentThemeName}`}>
+        <style>{themedStyles}</style>
 
-      {/* Header with Logout */}
-      <header style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 20px', background: '#2d3748', color: 'white', alignItems: 'center', marginBottom: '20px', borderRadius: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <img src={logo} alt="Logo" style={{ height: '30px' }} />
-          <span>Welcome, {currentStudent.name} ({currentStudent.grade_band})</span>
-        </div>
-        <button onClick={handleLogout} style={{ background: '#e53e3e', border: 'none', padding: '5px 10px', color: 'white', borderRadius: '5px', cursor: 'pointer' }}>Logout</button>
-      </header>
-
-      {currentScreen === 'welcome' && (
-        <WelcomeView
-          switchToSelection={switchToSelection}
-          parentPin={parentPin}
-          setParentPin={setParentPin}
-          handleParentLogin={handleParentLogin}
-          loading={loading}
-          parentStatus={parentStatus}
-        />
-      )}
-
-      {currentScreen === 'selection' && (
-        <SelectionView
-          userGrade={userGrade}
-          setUserGrade={setUserGrade}
-          userBoard={userBoard}
-          setUserBoard={setUserBoard}
-          userSubjectId={userSubjectId}
-          handleSubjectChange={handleSubjectChange}
-          subjects={subjects}
-          setupLearning={setupLearning}
-          selectionStatus={selectionStatus}
-        />
-      )}
-
-      {currentScreen === "selectChapter" && (
-        <ChapterSelectionView
-          selectedDbChapter={selectedDbChapter}
-          setSelectedDbChapter={setSelectedDbChapter}
-          dbChapters={dbChapters}
-          setCurrentScreen={setCurrentScreen}
-        />
-      )}
-
-      {currentScreen === 'main' && (
-        <div>
-          <div className="header-section">
-            <div className="coin-display">{getCoinDisplay()}</div>
-            <button className="warning-button" onClick={() => setCurrentScreen('welcome')}>
-              🏠 Back to Home
+        {/* Theme-aware Header with Logout */}
+        <header style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          padding: currentThemeName === 'kids' ? '15px 25px' : '10px 20px',
+          background: currentTheme.colors.headerBg,
+          color: currentTheme.colors.textOnPrimary,
+          alignItems: 'center',
+          marginBottom: '20px',
+          borderRadius: currentTheme.borderRadius.medium,
+          boxShadow: currentTheme.shadows.card,
+          transition: 'all 0.3s ease'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <img src={logo} alt="Logo" style={{
+              height: currentThemeName === 'kids' ? '40px' : '30px',
+              filter: currentThemeName === 'kids' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' : 'none'
+            }} />
+            <div>
+              <span style={{
+                fontFamily: currentTheme.fonts.primary,
+                fontSize: currentThemeName === 'kids' ? '18px' : '16px',
+                fontWeight: '600'
+              }}>
+                {currentThemeName === 'kids' ? '🎉 ' : ''}
+                Welcome, {currentStudent.name}!
+              </span>
+              <span style={{
+                marginLeft: '10px',
+                padding: '4px 12px',
+                background: 'rgba(255,255,255,0.2)',
+                borderRadius: currentTheme.borderRadius.pill,
+                fontSize: currentThemeName === 'kids' ? '14px' : '12px'
+              }}>
+                {currentTheme.icons.star} {currentStudent.grade_band}
+              </span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            {/* Theme indicator */}
+            <span style={{
+              fontSize: '12px',
+              opacity: 0.8,
+              padding: '4px 10px',
+              background: 'rgba(255,255,255,0.1)',
+              borderRadius: currentTheme.borderRadius.small
+            }}>
+              {currentTheme.displayName}
+            </span>
+            <button
+              onClick={handleLogout}
+              style={{
+                background: currentTheme.colors.danger,
+                border: 'none',
+                padding: currentThemeName === 'kids' ? '8px 16px' : '6px 12px',
+                color: 'white',
+                borderRadius: currentTheme.borderRadius.small,
+                cursor: 'pointer',
+                fontFamily: currentTheme.fonts.primary,
+                fontWeight: '600',
+                fontSize: currentThemeName === 'kids' ? '14px' : '13px',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {currentThemeName === 'kids' ? '👋 Bye!' : 'Logout'}
             </button>
           </div>
-          <div className="tab-container">
-            <button className={`tab-nav ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
-              🏠 Dashboard
-            </button>
-            <button className={`tab-nav ${activeTab === 'video' ? 'active' : ''}`} onClick={() => setActiveTab('video')}>
-              📺 Watch & Learn
-            </button>
-            <button className={`tab-nav ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}>
-              🎯 Quiz Time
-            </button>
-            <button className={`tab-nav ${activeTab === 'rewards' ? 'active' : ''}`} onClick={() => setActiveTab('rewards')}>
-              🏆 Rewards & Shop
-            </button>
-            <button className={`tab-nav ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
-              💬 AI Tutor Chat
-            </button>
-            <button className={`tab-nav ${activeTab === 'parent' ? 'active' : ''}`} onClick={() => setActiveTab('parent')}>
-              👨‍👩‍👧‍👦 Parent Zone
-            </button>
-            <button className={`tab-nav ${activeTab === 'flashcards' ? 'active' : ''}`} onClick={() => setActiveTab('flashcards')}>
-              🃏 Flashcards
-            </button>
+        </header>
+
+        {currentScreen === 'welcome' && (
+          <WelcomeView
+            switchToSelection={switchToSelection}
+            parentPin={parentPin}
+            setParentPin={setParentPin}
+            handleParentLogin={handleParentLogin}
+            loading={loading}
+            parentStatus={parentStatus}
+          />
+        )}
+
+        {currentScreen === 'selection' && (
+          <SelectionView
+            userGrade={userGrade}
+            setUserGrade={setUserGrade}
+            userBoard={userBoard}
+            setUserBoard={setUserBoard}
+            userSubjectId={userSubjectId}
+            handleSubjectChange={handleSubjectChange}
+            subjects={subjects}
+            setupLearning={setupLearning}
+            selectionStatus={selectionStatus}
+          />
+        )}
+
+        {currentScreen === "selectChapter" && (
+          <ChapterSelectionView
+            selectedDbChapter={selectedDbChapter}
+            setSelectedDbChapter={setSelectedDbChapter}
+            dbChapters={dbChapters}
+            goToSubchapter={handleChapterContinue}
+          />
+        )}
+
+        {currentScreen === "selectSubchapter" && (
+          <SubchapterSelectionView
+            selectedDbSubchapter={selectedDbSubchapter}
+            setSelectedDbSubchapter={setSelectedDbSubchapter}
+            dbSubchapters={dbSubchapters}
+            onContinue={() => setCurrentScreen("main")}
+          />
+        )}
+
+        {currentScreen === 'main' && (
+          <div>
+            <div className="header-section">
+              <div className="coin-display">{getCoinDisplay()}</div>
+              <button className="warning-button" onClick={() => setCurrentScreen('welcome')}>
+                🏠 Back to Home
+              </button>
+            </div>
+            <div className="tab-container">
+              <button className={`tab-nav ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
+                🏠 Dashboard
+              </button>
+              <button className={`tab-nav ${activeTab === 'video' ? 'active' : ''}`} onClick={() => setActiveTab('video')}>
+                📺 Watch & Learn
+              </button>
+              <button className={`tab-nav ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}>
+                🎯 Quiz Time
+              </button>
+              <button className={`tab-nav ${activeTab === 'rewards' ? 'active' : ''}`} onClick={() => setActiveTab('rewards')}>
+                🏆 Rewards & Shop
+              </button>
+              <button className={`tab-nav ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
+                💬 AI Tutor Chat
+              </button>
+              <button className={`tab-nav ${activeTab === 'parent' ? 'active' : ''}`} onClick={() => setActiveTab('parent')}>
+                👨‍👩‍👧‍👦 Parent Zone
+              </button>
+              <button className={`tab-nav ${activeTab === 'flashcards' ? 'active' : ''}`} onClick={() => setActiveTab('flashcards')}>
+                🃏 Flashcards
+              </button>
+            </div>
+
+            {activeTab === 'home' && (
+              <DashboardView
+                gameState={gameState}
+                generateLearningRoadmap={generateLearningRoadmap}
+                loading={loading}
+                learningPlan={learningPlan}
+              />
+            )}
+
+            {activeTab === 'video' && (
+              <VideoView
+                videoTitle={videoTitle}
+                videoPlayerHtml={videoPlayerHtml}
+                userSubject={userSubject}
+                loadVideoForSubject={loadVideoForSubject}
+                loading={loading}
+                completeVideoWatching={completeVideoWatching}
+                videoCompletionMsg={videoCompletionMsg}
+                checkAttention={checkAttention}
+                attentionStatus={attentionStatus}
+                attentionAlert={attentionAlert}
+                socraticQuestion={socraticQuestion}
+                handleSocraticAnswer={handleSocraticAnswer}
+              />
+            )}
+
+            {activeTab === 'quiz' && (
+              <QuizView
+                userSubject={userSubject}
+                startQuizSession={startQuizSession}
+                loading={loading}
+                quizContainerVisible={quizContainerVisible}
+                currentQuestion={currentQuestion}
+                answerOptions={answerOptions}
+                quizAnswers={quizAnswers}
+                currentQuestionIndex={currentQuestionIndex}
+                handleQuizAnswer={handleQuizAnswer}
+                quizProgress={quizProgress}
+                quizQuestions={quizQuestions}
+                submitQuizFinal={submitQuizFinal}
+                quizResults={quizResults}
+                handleNextQuestion={handleNextQuestion}
+                userSubjectId={userSubjectId}
+                selectedDbChapter={selectedDbChapter}
+                calculateQuizScore={calculateQuizScore}
+                addCoins={addCoins}
+                setGameState={setGameState}
+              />
+            )}
+
+            {activeTab === 'flashcards' && (
+              <FlashcardView
+                studentId={currentStudent?.id}
+                chapterId={selectedDbChapter}
+              />
+            )}
+
+            {activeTab === 'rewards' && (
+              <RewardsView
+                gameState={gameState}
+                PERKS_SHOP={PERKS_SHOP}
+                buyPerk={buyPerk}
+                loading={loading}
+                perkResult={perkResult}
+              />
+            )}
+
+            {activeTab === 'chat' && (
+              <ChatView
+                userSubject={userSubject}
+                chatHistory={chatHistory}
+                chatMessage={chatMessage}
+                setChatMessage={setChatMessage}
+                chatWithTutor={chatWithTutor}
+                loading={loading}
+                setChatHistory={setChatHistory}
+              />
+            )}
+
+            {activeTab === 'parent' && (
+              <ParentView
+                gameState={gameState}
+                userGrade={userGrade}
+                userBoard={userBoard}
+                userSubject={userSubject}
+                logoutParent={logoutParent}
+              />
+            )}
           </div>
-
-          {activeTab === 'home' && (
-            <DashboardView
-              gameState={gameState}
-              generateLearningRoadmap={generateLearningRoadmap}
-              loading={loading}
-              learningPlan={learningPlan}
-            />
-          )}
-
-          {activeTab === 'video' && (
-            <VideoView
-              videoTitle={videoTitle}
-              videoPlayerHtml={videoPlayerHtml}
-              userSubject={userSubject}
-              loadVideoForSubject={loadVideoForSubject}
-              loading={loading}
-              completeVideoWatching={completeVideoWatching}
-              videoCompletionMsg={videoCompletionMsg}
-              checkAttention={checkAttention}
-              attentionStatus={attentionStatus}
-              attentionAlert={attentionAlert}
-              socraticQuestion={socraticQuestion}
-              handleSocraticAnswer={handleSocraticAnswer}
-            />
-          )}
-
-          {activeTab === 'quiz' && (
-            <QuizView
-              userSubject={userSubject}
-              startQuizSession={startQuizSession}
-              loading={loading}
-              quizContainerVisible={quizContainerVisible}
-              currentQuestion={currentQuestion}
-              answerOptions={answerOptions}
-              quizAnswers={quizAnswers}
-              currentQuestionIndex={currentQuestionIndex}
-              handleQuizAnswer={handleQuizAnswer}
-              quizProgress={quizProgress}
-              quizQuestions={quizQuestions}
-              submitQuizFinal={submitQuizFinal}
-              quizResults={quizResults}
-              handleNextQuestion={handleNextQuestion}
-              userSubjectId={userSubjectId}
-              selectedDbChapter={selectedDbChapter}
-              calculateQuizScore={calculateQuizScore}
-              addCoins={addCoins}
-              setGameState={setGameState}
-            />
-          )}
-
-          {activeTab === 'flashcards' && (
-            <FlashcardView
-              studentId={currentStudent?.id}
-              chapterId={selectedDbChapter}
-            />
-          )}
-
-          {activeTab === 'rewards' && (
-            <RewardsView
-              gameState={gameState}
-              PERKS_SHOP={PERKS_SHOP}
-              buyPerk={buyPerk}
-              loading={loading}
-              perkResult={perkResult}
-            />
-          )}
-
-          {activeTab === 'chat' && (
-            <ChatView
-              userSubject={userSubject}
-              chatHistory={chatHistory}
-              chatMessage={chatMessage}
-              setChatMessage={setChatMessage}
-              chatWithTutor={chatWithTutor}
-              loading={loading}
-              setChatHistory={setChatHistory}
-            />
-          )}
-
-          {activeTab === 'parent' && (
-            <ParentView
-              gameState={gameState}
-              userGrade={userGrade}
-              userBoard={userBoard}
-              userSubject={userSubject}
-              logoutParent={logoutParent}
-            />
-          )}
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </ThemeProvider>
   );
 };
 

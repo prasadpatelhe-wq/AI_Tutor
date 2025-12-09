@@ -6,6 +6,7 @@ const API_BASE_URL = "http://localhost:8000";
 const FlashcardView = ({ chapterId, studentId }) => {
   const [flashcards, setFlashcards] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [chapterTitle, setChapterTitle] = useState("");
   const [flippedCards, setFlippedCards] = useState({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [transitionDirection, setTransitionDirection] = useState("");
@@ -76,8 +77,10 @@ const FlashcardView = ({ chapterId, studentId }) => {
           `${API_BASE_URL}/flashcards/chapter/${studentId}/${chapterId}`
         );
 
-        const incomingCards = response.data || [];
+        const data = response.data;
+        const incomingCards = Array.isArray(data) ? data : (data?.flashcards || []);
         setFlashcards(incomingCards);
+        setChapterTitle(data?.chapter_title || "");
         setCurrentIndex(0);
         setFlippedCards({});
         setTransitionDirection("");
@@ -130,7 +133,7 @@ const FlashcardView = ({ chapterId, studentId }) => {
   return (
     <div className="content-section">
       <h3 style={{ textAlign: "center", marginBottom: "30px" }}>
-        🃏 Flashcards for Chapter {chapterId}
+        🃏 Flashcards for {chapterTitle || `Chapter ${chapterId}`}
       </h3>
 
       {flashcards.length === 0 ? (

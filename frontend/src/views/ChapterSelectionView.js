@@ -1,6 +1,6 @@
 import React from 'react';
 
-const ChapterSelectionView = ({ selectedDbChapter, setSelectedDbChapter, dbChapters, setCurrentScreen }) => {
+const ChapterSelectionView = ({ selectedDbChapter, setSelectedDbChapter, dbChapters, goToSubchapter }) => {
   return (
     <div style={{ textAlign: "center", marginTop: "40px" }}>
       <h2>📘 Select a Chapter</h2>
@@ -21,9 +21,9 @@ const ChapterSelectionView = ({ selectedDbChapter, setSelectedDbChapter, dbChapt
         className="big-button"
         style={{ marginTop: "20px" }}
         disabled={!selectedDbChapter}
-        onClick={() => setCurrentScreen("main")}
+        onClick={goToSubchapter}
       >
-        🚀 Start Learning!
+        🚀 Next: Choose Subchapter
       </button>
     </div>
   );

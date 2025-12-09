@@ -13,12 +13,14 @@ for path in [ROOT_DIR, BASE_DIR, SRC_DIR]:
     if path not in sys.path:
         sys.path.append(path)
 
-from backend.database import SessionLocal
+from backend.database import SessionLocal, Base, engine
+from sqlalchemy import text
 from backend.services.flashcard_service import save_flashcards_from_quiz, get_flashcards
 
 # -----------------------------------------------------------
 # Flashcard Endpoints
 # -----------------------------------------------------------
+import backend.models  # noqa: F401  # Ensure all models are registered with Base
 
 from backend.services.progress_service import update_progress, get_due_flashcards
 from fastapi import FastAPI, HTTPException
@@ -27,6 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import random
 from datetime import datetime
+from typing import Optional
 from src.tutor.interface import tutor_interface as AI_TUTOR
 from src.tutor.interface import tutor_interface
 from backend.database import SessionLocal
@@ -37,39 +40,155 @@ from backend.routes.subjects_router import router as subjects_router
 from backend.routes.chapters_router import router as chapters_router
 from backend.routes.meta_router import router as meta_router
 from backend.routes.students_router import router as students_router
+from backend.routes.subchapters_router import router as subchapters_router
 import logging
-import sqlite3
 
 # === Database Schema Migration ===
 def run_migrations():
+    """
+    Lightweight, idempotent migration helper.
+    - For SQLite: keep previous behavior using PRAGMA checks.
+    - For MySQL/MariaDB: use information_schema to add missing columns on students.
+    """
     try:
-        # Connect to the database directly to run raw SQL for schema updates
-        # This is a simple migration strategy for SQLite
-        db_path = os.path.join(ROOT_DIR, "tutor.db")
-        conn = sqlite3.connect(db_path)
-        cursor = conn.cursor()
-        
-        # Check if columns exist in students table
-        cursor.execute("PRAGMA table_info(students)")
-        columns = [info[1] for info in cursor.fetchall()]
-        
-        if "is_active" not in columns:
-            print("Migrating: Adding is_active column to students table...")
-            cursor.execute("ALTER TABLE students ADD COLUMN is_active INTEGER DEFAULT 1")
-            
-        if "password" not in columns:
-            print("Migrating: Adding password column to students table...")
-            cursor.execute("ALTER TABLE students ADD COLUMN password TEXT")
+        dialect = engine.url.get_backend_name()
 
-        if "board" not in columns:
-            print("Migrating: Adding board column to students table...")
-            cursor.execute("ALTER TABLE students ADD COLUMN board TEXT")
-            
-        conn.commit()
-        conn.close()
-        print("✅ Database schema check completed.")
+        if dialect == "sqlite":
+            db_path = engine.url.database
+            if db_path and not os.path.isabs(db_path):
+                db_path = os.path.abspath(os.path.join(os.getcwd(), db_path))
+
+            conn = engine.raw_connection()
+            try:
+                cursor = conn.cursor()
+
+                # Ensure students table exists (create all tables if missing)
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='students'")
+                has_students = cursor.fetchone() is not None
+                if not has_students:
+                    print(f"Creating database tables (students table missing)... [db={db_path or ':memory:'}]")
+                    Base.metadata.create_all(bind=engine)
+                    return
+                
+                # Check if columns exist in students table
+                cursor.execute("PRAGMA table_info(students)")
+                columns = [info[1] for info in cursor.fetchall()]
+
+                if "name" not in columns:
+                    print("Migrating: Adding name column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN name TEXT")
+                    if "full_name" in columns:
+                        cursor.execute("UPDATE students SET name = full_name WHERE full_name IS NOT NULL")
+                
+                if "is_active" not in columns:
+                    print("Migrating: Adding is_active column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN is_active INTEGER DEFAULT 1")
+                    
+                if "password" not in columns:
+                    print("Migrating: Adding password column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN password TEXT")
+
+                if "board" not in columns:
+                    print("Migrating: Adding board column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN board TEXT")
+
+                if "grade_band" not in columns:
+                    print("Migrating: Adding grade_band column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN grade_band TEXT")
+
+                if "medium" not in columns:
+                    print("Migrating: Adding medium column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN medium TEXT")
+
+                # Flashcard subchapter support
+                cursor.execute("PRAGMA table_info(flashcard)")
+                flash_cols = [info[1] for info in cursor.fetchall()]
+                if "subchapter_id" not in flash_cols:
+                    print("Migrating: Adding subchapter_id to flashcard table...")
+                    cursor.execute("ALTER TABLE flashcard ADD COLUMN subchapter_id TEXT")
+                    
+                conn.commit()
+            finally:
+                conn.close()
+
+            print("Database schema check completed.")
+            return
+
+        # MySQL / MariaDB path
+        if dialect in ["mysql", "mariadb"]:
+            with engine.begin() as conn:
+                table_exists = conn.execute(
+                    text(
+                        "SELECT COUNT(*) FROM information_schema.tables "
+                        "WHERE table_schema = DATABASE() AND table_name = 'students'"
+                    )
+                ).scalar()
+                if not table_exists:
+                    print("Creating database tables (students table missing)...")
+                    Base.metadata.create_all(bind=engine)
+                    return
+
+                cols = {
+                    row[0]
+                    for row in conn.execute(
+                        text(
+                            "SELECT column_name FROM information_schema.columns "
+                            "WHERE table_schema = DATABASE() AND table_name = 'students'"
+                        )
+                    )
+                }
+
+                if "name" not in cols:
+                    if "full_name" in cols:
+                        print("Migrating: Renaming full_name -> name on students...")
+                        conn.execute(text("ALTER TABLE students CHANGE full_name name VARCHAR(100)"))
+                    else:
+                        print("Migrating: Adding name column to students...")
+                        conn.execute(text("ALTER TABLE students ADD COLUMN name VARCHAR(100) NOT NULL"))
+
+                if "password" not in cols:
+                    print("Migrating: Adding password column to students...")
+                    conn.execute(text("ALTER TABLE students ADD COLUMN password VARCHAR(200)"))
+
+                if "grade_band" not in cols:
+                    print("Migrating: Adding grade_band column to students...")
+                    conn.execute(text("ALTER TABLE students ADD COLUMN grade_band VARCHAR(20)"))
+
+                if "board" not in cols:
+                    print("Migrating: Adding board column to students...")
+                    conn.execute(text("ALTER TABLE students ADD COLUMN board VARCHAR(50)"))
+
+                if "is_active" not in cols:
+                    print("Migrating: Adding is_active column to students...")
+                    conn.execute(text("ALTER TABLE students ADD COLUMN is_active TINYINT(1) DEFAULT 1"))
+
+                if "medium" not in cols:
+                    print("Migrating: Adding medium column to students...")
+                    conn.execute(text("ALTER TABLE students ADD COLUMN medium VARCHAR(50) NULL"))
+
+                # Flashcard subchapter support
+                flash_cols = {
+                    row[0]
+                    for row in conn.execute(
+                        text(
+                            "SELECT column_name FROM information_schema.columns "
+                            "WHERE table_schema = DATABASE() AND table_name = 'flashcard'"
+                        )
+                    )
+                }
+                if "subchapter_id" not in flash_cols:
+                    print("Migrating: Adding subchapter_id to flashcard table...")
+                    conn.execute(text("ALTER TABLE flashcard ADD COLUMN subchapter_id VARCHAR(36) NULL"))
+
+            print("Database schema check completed.")
+            return
+
+        # Fallback: just ensure tables exist
+        print(f"Skipping migrations for unsupported dialect '{dialect}', running create_all() as a fallback...")
+        Base.metadata.create_all(bind=engine)
+
     except Exception as e:
-        print(f"⚠️ Migration warning: {e}")
+        print(f"Migration warning: {e}")
 
 run_migrations()
 
@@ -167,9 +286,12 @@ class VideoRequest(BaseModel):
 class QuizRequest(BaseModel):
     subject: str
     grade_band: str
-    chapter_id: int
+    chapter_id: str
     chapter_title: str
     chapter_summary: str
+    subchapter_id: Optional[str] = None
+    subchapter_title: Optional[str] = None
+    subchapter_summary: Optional[str] = None
     num_questions: int = 5
     difficulty: str = "basic"
 
@@ -183,9 +305,9 @@ class QuizScoreRequest(BaseModel):
     answers: list[int]
     correct_answers: list[int]
     difficulty: str = "basic"
-    chapter_id: Optional[int] = None
-    subject_id: Optional[int] = None
-    student_id: Optional[int] = None
+    chapter_id: Optional[str] = None
+    subject_id: Optional[str] = None
+    student_id: Optional[str] = None
 
 class PerkBuyRequest(BaseModel):
     perk_index: int
@@ -201,8 +323,8 @@ class ChatRequest(BaseModel):
     grade: str
 
 class ProgressRequest(BaseModel):
-    student_id: int
-    flashcard_id: int
+    student_id: str
+    flashcard_id: str
     correct: bool
 
 # FastAPI app
@@ -212,6 +334,7 @@ app.include_router(subjects_router)
 app.include_router(subjects_router)
 app.include_router(meta_router)
 app.include_router(students_router)
+app.include_router(subchapters_router)
 # CORS middleware for React frontend
 app.add_middleware(
     CORSMiddleware,
@@ -283,7 +406,7 @@ from backend.database import SessionLocal
 from backend.services.flashcard_service import save_flashcards_from_quiz
 
 @app.post("/generate_quiz")
-def generate_quiz(request: QuizRequest, student_id: int = None):
+def generate_quiz(request: QuizRequest, student_id: str = None):
     """
     Generates quizzes for basic, medium, and hard difficulty levels.
     Automatically saves flashcards (question + explanation) into the database.
@@ -307,9 +430,9 @@ def generate_quiz(request: QuizRequest, student_id: int = None):
         result = AI_TUTOR.generate_all_quizzes(
             subject=request.subject,
             grade_band=request.grade_band,
-            chapter_id=request.chapter_id,
-            chapter_title=request.chapter_title,
-            chapter_summary=request.chapter_summary,
+            chapter_id=request.subchapter_id or request.chapter_id,
+            chapter_title=request.subchapter_title or request.chapter_title,
+            chapter_summary=request.subchapter_summary or request.chapter_summary,
         )
 
         # ✅ Step 3: Auto-save flashcards for each difficulty level
@@ -318,10 +441,12 @@ def generate_quiz(request: QuizRequest, student_id: int = None):
                 save_flashcards_from_quiz(
                     quiz_data=quiz,
                     subject_name=request.subject,
-                    chapter_title=request.chapter_title,
+                    chapter_title=request.subchapter_title or request.chapter_title,
+                    chapter_summary=request.subchapter_summary or request.chapter_summary,
                     db=db,
                     student_id=student_id,  # store which student generated it
-                    chapter_id=request.chapter_id # ✅ Pass chapter_id
+                    chapter_id=request.chapter_id,  # parent chapter
+                    subchapter_id=request.subchapter_id,
                 )
 
         # ✅ Step 4: Return quiz data (for frontend)
@@ -385,7 +510,7 @@ def api_calculate_quiz_score(req: QuizScoreRequest):
     }
 
 @app.get("/student_score/{student_id}")
-def api_get_student_score(student_id: int):
+def api_get_student_score(student_id: str):
     db = SessionLocal()
     try:
         from backend.models.scorecard import Scorecard
