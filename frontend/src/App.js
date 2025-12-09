@@ -422,11 +422,19 @@ const App = () => {
 
   // --- Render Auth Views if not logged in ---
   if (!currentStudent) {
-    if (authView === 'login') {
-      return <LoginView onLoginSuccess={handleLoginSuccess} onNavigateToRegister={() => setAuthView('register')} />;
-    } else {
-      return <RegisterView onRegisterSuccess={handleRegisterSuccess} onNavigateToLogin={() => setAuthView('login')} />;
-    }
+    // Default to 'teen' theme for auth pages if no grade is known
+    const defaultThemeStyles = getThemedStyles('teen');
+
+    return (
+      <ThemeProvider gradeBand="Grade 9"> {/* Force teen theme */}
+        <style>{defaultThemeStyles}</style>
+        {authView === 'login' ? (
+          <LoginView onLoginSuccess={handleLoginSuccess} onNavigateToRegister={() => setAuthView('register')} />
+        ) : (
+          <RegisterView onRegisterSuccess={handleRegisterSuccess} onNavigateToLogin={() => setAuthView('login')} />
+        )}
+      </ThemeProvider>
+    );
   }
 
   // Render Main App with Theme
@@ -658,6 +666,7 @@ const App = () => {
               />
             )}
 
+
             {activeTab === 'chat' && (
               <ChatView
                 userSubject={userSubject}
@@ -667,8 +676,10 @@ const App = () => {
                 chatWithTutor={chatWithTutor}
                 loading={loading}
                 setChatHistory={setChatHistory}
+                theme={currentThemeName}
               />
             )}
+
 
             {activeTab === 'parent' && (
               <ParentView

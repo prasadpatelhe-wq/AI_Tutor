@@ -51,9 +51,9 @@ class StudentRegisterRequest(BaseModel):
     name: str
     email: str
     password: str
-    grade_band: str
-    board: str = "CBSE"  # Default to CBSE if not provided
-    medium: str | None = None  # Language/medium of instruction
+    grade_band: str | None = None
+    board: str | None = None
+    medium: str | None = None
 
 class StudentLoginRequest(BaseModel):
     email: str

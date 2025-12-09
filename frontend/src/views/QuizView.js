@@ -1,19 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import soundManager from '../SoundManager';
 
 const QuizView = ({
   userSubject,
   startQuizSession,
   loading,
-  quizContainerVisible,
-  quizQuestions: initialQuestions,
-  quizAnswers: initialAnswers,
-  currentQuestionIndex: initialIndex,
-  handleQuizAnswer: appHandleQuizAnswer,
-  quizProgress: appQuizProgress,
-  submitQuizFinal: appSubmitQuizFinal,
-  handleNextQuestion: appHandleNextQuestion,
-  quizResults: appQuizResults,
   userSubjectId,
   selectedDbChapter,
   calculateQuizScore,
@@ -29,56 +20,71 @@ const QuizView = ({
   const [localIndex, setLocalIndex] = useState(0);
   const [localResults, setLocalResults] = useState(null);
   const [isQuizActive, setIsQuizActive] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
-  const [questionAnim, setQuestionAnim] = useState('');
-  const [answerFeedback, setAnswerFeedback] = useState(null); // { index, isCorrect }
+  const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [showFeedback, setShowFeedback] = useState(false);
 
   // Initialize sound manager
   useEffect(() => {
     soundManager.setTheme(theme);
   }, [theme]);
 
-  // Theme styles
+  // Clean NotebookLM-inspired theme styles
   const getThemeStyles = () => {
     switch (theme) {
       case 'kids':
         return {
-          primary: '#FF6B9D',
-          secondary: '#4ECDC4',
-          accent: '#FFE66D',
-          cardBg: 'rgba(255, 255, 255, 0.95)',
-          textColor: '#333',
-          levelColors: { basic: '#7ED321', medium: '#F7971E', hard: '#FF5252' },
-          borderRadius: '25px',
-          confettiEmojis: ['🎉', '⭐', '🌟', '✨', '🎈', '🏆'],
+          primary: '#58CC02',
+          secondary: '#1CB0F6',
+          accent: '#FF9600',
+          error: '#FF4B4B',
+          cardBg: '#ffffff',
+          cardBorder: '#e5e5e5',
+          textPrimary: '#3c3c3c',
+          textSecondary: '#777777',
+          borderRadius: '16px',
+          optionBg: '#f7f7f7',
+          correctBg: '#d7ffb8',
+          wrongBg: '#ffdfe0',
+          levelColors: { basic: '#58CC02', medium: '#FF9600', hard: '#FF4B4B' },
         };
       case 'teen':
         return {
-          primary: '#667eea',
-          secondary: '#764ba2',
-          accent: '#4fd1c5',
-          cardBg: 'rgba(255, 255, 255, 0.1)',
-          textColor: '#fff',
-          levelColors: { basic: '#48bb78', medium: '#ed8936', hard: '#f56565' },
-          borderRadius: '15px',
-          confettiEmojis: ['🔥', '⚡', '💫', '✨'],
+          primary: '#1CB0F6',
+          secondary: '#8549BA',
+          accent: '#FF9600',
+          error: '#FF4B4B',
+          cardBg: 'rgba(255, 255, 255, 0.06)',
+          cardBorder: 'rgba(255, 255, 255, 0.12)',
+          textPrimary: '#ffffff',
+          textSecondary: 'rgba(255, 255, 255, 0.6)',
+          borderRadius: '16px',
+          optionBg: 'rgba(255, 255, 255, 0.05)',
+          correctBg: 'rgba(88, 204, 2, 0.2)',
+          wrongBg: 'rgba(255, 75, 75, 0.2)',
+          levelColors: { basic: '#58CC02', medium: '#FF9600', hard: '#FF4B4B' },
         };
       case 'mature':
       default:
         return {
-          primary: '#38B2AC',
-          secondary: '#4A5568',
-          accent: '#48BB78',
-          cardBg: 'rgba(255, 255, 255, 0.05)',
-          textColor: '#E2E8F0',
-          levelColors: { basic: '#48BB78', medium: '#ECC94B', hard: '#F56565' },
-          borderRadius: '8px',
-          confettiEmojis: [],
+          primary: '#1CB0F6',
+          secondary: '#58CC02',
+          accent: '#FF9600',
+          error: '#FF4B4B',
+          cardBg: 'rgba(255, 255, 255, 0.04)',
+          cardBorder: 'rgba(255, 255, 255, 0.08)',
+          textPrimary: '#ffffff',
+          textSecondary: 'rgba(255, 255, 255, 0.5)',
+          borderRadius: '12px',
+          optionBg: 'rgba(255, 255, 255, 0.03)',
+          correctBg: 'rgba(88, 204, 2, 0.15)',
+          wrongBg: 'rgba(255, 75, 75, 0.15)',
+          levelColors: { basic: '#58CC02', medium: '#FF9600', hard: '#FF4B4B' },
         };
     }
   };
 
   const themeStyles = getThemeStyles();
+  const isLightTheme = theme === 'kids';
 
   const handleStartQuiz = async () => {
     soundManager.playClickSound();
@@ -105,12 +111,15 @@ const QuizView = ({
     setCurrentLevel(level);
     setLocalResults(null);
     setIsQuizActive(true);
-    setQuestionAnim('slideIn');
-
+    setSelectedAnswer(null);
+    setShowFeedback(false);
     soundManager.playLevelUpSound();
   };
 
-  const handleLocalAnswer = (answerIndex) => {
+  const handleSelectAnswer = (answerIndex) => {
+    if (showFeedback) return;
+
+    setSelectedAnswer(answerIndex);
     const newAnswers = [...localAnswers];
     newAnswers[localIndex] = answerIndex;
     setLocalAnswers(newAnswers);
@@ -120,7 +129,7 @@ const QuizView = ({
     const correctIndex = currentQ?.correct_option_index ?? currentQ?.correct;
     const isCorrect = answerIndex === correctIndex;
 
-    setAnswerFeedback({ index: answerIndex, isCorrect });
+    setShowFeedback(true);
 
     if (isCorrect) {
       soundManager.playCorrectSound();
@@ -129,22 +138,17 @@ const QuizView = ({
     }
   };
 
-  const handleLocalNext = () => {
+  const handleNextQuestion = () => {
     if (localIndex < localQuestions.length - 1) {
-      setQuestionAnim('slideOut');
       soundManager.playClickSound();
-
-      setTimeout(() => {
-        setLocalIndex(localIndex + 1);
-        setAnswerFeedback(null);
-        setQuestionAnim('slideIn');
-      }, 300);
+      setLocalIndex(localIndex + 1);
+      setSelectedAnswer(null);
+      setShowFeedback(false);
     }
   };
 
   const submitLevel = async () => {
     soundManager.playAchievementSound();
-    setShowConfetti(true);
 
     const result = await calculateQuizScore(
       localAnswers,
@@ -158,8 +162,6 @@ const QuizView = ({
 
     setLocalResults(result);
     setIsQuizActive(false);
-
-    setTimeout(() => setShowConfetti(false), 3000);
   };
 
   const goToNextLevel = () => {
@@ -168,229 +170,174 @@ const QuizView = ({
     else if (currentLevel === 'medium') startLevel('hard');
   };
 
+  const resetQuiz = () => {
+    soundManager.playClickSound();
+    setAllQuizData(null);
+    setLocalResults(null);
+    setIsQuizActive(false);
+    setSelectedAnswer(null);
+    setShowFeedback(false);
+  };
+
   const currentQ = localQuestions[localIndex];
-  const currentQuestionText = currentQ ? `Question ${localIndex + 1}: ${currentQ.question_text || currentQ.question}` : '';
+  const currentQuestionText = currentQ ? (currentQ.question_text || currentQ.question) : '';
   const currentOptions = currentQ ? (currentQ.options || []) : [];
   const progressPercent = localQuestions.length > 0 ? ((localIndex + 1) / localQuestions.length) * 100 : 0;
+  const correctIndex = currentQ ? (currentQ.correct_option_index ?? currentQ.correct) : -1;
 
   const showStart = !isQuizActive && !localResults;
   const showQuiz = isQuizActive;
   const showResults = !isQuizActive && localResults;
 
-  // Confetti renderer
-  const renderConfetti = () => {
-    if (!showConfetti || themeStyles.confettiEmojis.length === 0) return null;
-
-    return (
-      <div style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100%',
-        height: '100%',
-        pointerEvents: 'none',
-        zIndex: 1000,
-        overflow: 'hidden'
-      }}>
-        {Array.from({ length: 30 }).map((_, i) => (
-          <span
-            key={i}
-            style={{
-              position: 'absolute',
-              fontSize: `${Math.random() * 25 + 20}px`,
-              left: `${Math.random() * 100}%`,
-              top: '-60px',
-              animation: `confettiFall ${Math.random() * 2 + 2}s ease-out forwards`,
-              animationDelay: `${Math.random() * 0.5}s`,
-              opacity: 0.9
-            }}
-          >
-            {themeStyles.confettiEmojis[Math.floor(Math.random() * themeStyles.confettiEmojis.length)]}
-          </span>
-        ))}
-      </div>
-    );
-  };
-
-  // Level badge component
-  const LevelBadge = ({ level }) => (
+  // Level Badge Component
+  const LevelBadge = ({ level, size = 'normal' }) => (
     <span style={{
-      background: `linear-gradient(135deg, ${themeStyles.levelColors[level]}, ${themeStyles.levelColors[level]}cc)`,
+      background: themeStyles.levelColors[level],
       color: 'white',
-      padding: theme === 'kids' ? '8px 20px' : '6px 16px',
-      borderRadius: theme === 'kids' ? '20px' : '12px',
-      fontSize: theme === 'kids' ? '0.95rem' : '0.85rem',
+      padding: size === 'small' ? '4px 10px' : '6px 14px',
+      borderRadius: '20px',
+      fontSize: size === 'small' ? '12px' : '13px',
       fontWeight: '700',
       textTransform: 'uppercase',
-      letterSpacing: '1px',
-      boxShadow: `0 4px 15px ${themeStyles.levelColors[level]}50`,
-      animation: 'pulse 2s ease-in-out infinite'
+      letterSpacing: '0.5px',
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px'
     }}>
       {level === 'basic' ? '🌱' : level === 'medium' ? '🔥' : '💎'} {level}
     </span>
   );
 
   return (
-    <div className="content-section" style={{ position: 'relative' }}>
-      {/* Confetti */}
-      {renderConfetti()}
-
-      {/* Keyframe animations */}
+    <div className="content-section">
       <style>{`
-        @keyframes slideIn {
-          from {
-            opacity: 0;
-            transform: translateX(50px);
-          }
-          to {
-            opacity: 1;
-            transform: translateX(0);
-          }
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
         }
         
-        @keyframes slideOut {
-          from {
-            opacity: 1;
-            transform: translateX(0);
-          }
-          to {
-            opacity: 0;
-            transform: translateX(-50px);
-          }
-        }
-        
-        @keyframes confettiFall {
-          0% {
-            transform: translateY(0) rotate(0deg);
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(100vh) rotate(720deg);
-            opacity: 0;
-          }
-        }
-        
-        @keyframes pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
+        @keyframes scaleIn {
+          from { transform: scale(0.95); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
         }
         
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
-          25% { transform: translateX(-5px); }
-          75% { transform: translateX(5px); }
+          25% { transform: translateX(-4px); }
+          75% { transform: translateX(4px); }
         }
         
-        @keyframes correctPop {
-          0% { transform: scale(1); }
-          50% { transform: scale(1.1); }
-          100% { transform: scale(1); }
+        .quiz-option {
+          transition: all 0.2s ease;
+          cursor: pointer;
         }
         
-        @keyframes shimmer {
-          0% { background-position: -200% center; }
-          100% { background-position: 200% center; }
+        .quiz-option:hover:not(.answered) {
+          transform: translateX(4px);
+          border-color: ${themeStyles.primary};
         }
         
-        @keyframes floatEmoji {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
+        .quiz-option.correct {
+          animation: scaleIn 0.3s ease;
         }
         
-        @keyframes scoreCount {
-          from { transform: scale(0.5); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
+        .quiz-option.wrong {
+          animation: shake 0.3s ease;
         }
       `}</style>
 
       {/* Header */}
-      <h3 style={{
-        textAlign: 'center',
-        marginBottom: '30px',
-        background: theme !== 'mature'
-          ? `linear-gradient(135deg, ${themeStyles.primary}, ${themeStyles.secondary})`
-          : 'none',
-        WebkitBackgroundClip: theme !== 'mature' ? 'text' : 'unset',
-        WebkitTextFillColor: theme !== 'mature' ? 'transparent' : themeStyles.textColor,
-        backgroundClip: theme !== 'mature' ? 'text' : 'unset',
-        fontSize: theme === 'kids' ? '2rem' : '1.5rem'
-      }}>
-        🧠 Test Your Knowledge
-      </h3>
+      <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+        <h2 style={{
+          color: themeStyles.textPrimary,
+          fontSize: '1.5rem',
+          fontWeight: '700',
+          marginBottom: '8px'
+        }}>
+          🧠 Quiz Time
+        </h2>
+        <p style={{
+          color: themeStyles.textSecondary,
+          fontSize: '15px',
+          margin: 0
+        }}>
+          Test your knowledge on {userSubject}
+        </p>
+      </div>
 
       {/* Start Screen */}
       {showStart && (
-        <div
-          className="kid-card"
-          style={{
-            textAlign: 'center',
-            animation: 'slideIn 0.5s ease-out',
-            background: themeStyles.cardBg,
-            backdropFilter: 'blur(20px)'
-          }}
-        >
-          <div style={{
-            fontSize: theme === 'kids' ? '4rem' : '3rem',
-            marginBottom: '20px',
-            animation: 'floatEmoji 2s ease-in-out infinite'
+        <div style={{
+          background: themeStyles.cardBg,
+          border: `1px solid ${themeStyles.cardBorder}`,
+          borderRadius: themeStyles.borderRadius,
+          padding: '48px 32px',
+          textAlign: 'center',
+          animation: 'fadeIn 0.4s ease'
+        }}>
+          <div style={{ fontSize: '64px', marginBottom: '24px' }}>🎯</div>
+
+          <h3 style={{
+            color: themeStyles.textPrimary,
+            fontSize: '1.3rem',
+            fontWeight: '700',
+            marginBottom: '16px'
           }}>
-            🎯
-          </div>
-          <h4 style={{
-            color: themeStyles.primary,
-            marginBottom: '20px',
-            fontSize: theme === 'kids' ? '1.5rem' : '1.2rem'
-          }}>
-            Ready to challenge yourself?
-          </h4>
+            Ready to test yourself?
+          </h3>
+
           <p style={{
-            fontSize: '16px',
-            color: theme === 'mature' ? '#A0AEC0' : '#666',
-            marginBottom: '30px'
+            color: themeStyles.textSecondary,
+            fontSize: '15px',
+            marginBottom: '32px',
+            maxWidth: '360px',
+            margin: '0 auto 32px'
           }}>
-            Test what you've learned with our interactive quiz for <strong>{userSubject}</strong>!
+            Complete three levels of questions and earn coins for each correct answer!
           </p>
 
-          {/* Level preview */}
+          {/* Level Preview */}
           <div style={{
             display: 'flex',
             justifyContent: 'center',
-            gap: '15px',
-            marginBottom: '30px',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '32px',
             flexWrap: 'wrap'
           }}>
             <LevelBadge level="basic" />
-            <span style={{ color: theme === 'mature' ? '#A0AEC0' : '#999', alignSelf: 'center' }}>→</span>
+            <span style={{ color: themeStyles.textSecondary }}>→</span>
             <LevelBadge level="medium" />
-            <span style={{ color: theme === 'mature' ? '#A0AEC0' : '#999', alignSelf: 'center' }}>→</span>
+            <span style={{ color: themeStyles.textSecondary }}>→</span>
             <LevelBadge level="hard" />
           </div>
 
-          <div className="button-group">
-            <button
-              className="big-button"
-              onClick={handleStartQuiz}
-              disabled={loading.quiz}
-              style={{
-                animation: !loading.quiz ? 'pulse 2s ease-in-out infinite' : 'none'
-              }}
-            >
-              {loading.quiz ? '🔄 Creating Quiz...' : `🚀 Start ${userSubject} Quiz!`}
-            </button>
-          </div>
+          <button
+            onClick={handleStartQuiz}
+            disabled={loading.quiz}
+            style={{
+              padding: '16px 48px',
+              borderRadius: '14px',
+              border: 'none',
+              background: loading.quiz
+                ? (isLightTheme ? '#e5e5e5' : 'rgba(255,255,255,0.1)')
+                : themeStyles.primary,
+              color: loading.quiz ? themeStyles.textSecondary : 'white',
+              fontSize: '17px',
+              fontWeight: '700',
+              cursor: loading.quiz ? 'not-allowed' : 'pointer',
+              boxShadow: loading.quiz ? 'none' : `0 4px 0 0 #1890d0`,
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {loading.quiz ? '🔄 Loading...' : '🚀 Start Quiz'}
+          </button>
         </div>
       )}
 
       {/* Active Quiz */}
       {showQuiz && (
-        <div
-          className="kid-card"
-          style={{
-            animation: `${questionAnim} 0.3s ease-out`,
-            background: themeStyles.cardBg,
-            backdropFilter: 'blur(20px)'
-          }}
-        >
+        <div style={{ animation: 'fadeIn 0.4s ease' }}>
           {/* Quiz Header */}
           <div style={{
             display: 'flex',
@@ -398,147 +345,124 @@ const QuizView = ({
             alignItems: 'center',
             marginBottom: '20px',
             flexWrap: 'wrap',
-            gap: '10px'
+            gap: '12px'
           }}>
             <LevelBadge level={currentLevel} />
             <span style={{
+              color: themeStyles.textSecondary,
               fontSize: '14px',
-              color: theme === 'mature' ? '#A0AEC0' : '#666',
               fontWeight: '600'
             }}>
-              {localIndex + 1} / {localQuestions.length}
+              Question {localIndex + 1} of {localQuestions.length}
             </span>
           </div>
 
           {/* Progress Bar */}
           <div style={{
-            height: theme === 'kids' ? '12px' : '8px',
-            background: 'rgba(0,0,0,0.1)',
-            borderRadius: '20px',
-            marginBottom: '25px',
+            height: '8px',
+            background: isLightTheme ? '#e5e5e5' : 'rgba(255,255,255,0.1)',
+            borderRadius: '4px',
+            marginBottom: '32px',
             overflow: 'hidden'
           }}>
             <div style={{
               height: '100%',
               width: `${progressPercent}%`,
-              background: `linear-gradient(90deg, ${themeStyles.primary}, ${themeStyles.secondary})`,
-              borderRadius: '20px',
-              transition: 'width 0.5s ease-out',
-              position: 'relative'
-            }}>
-              <div style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',
-                animation: 'shimmer 2s linear infinite'
-              }} />
-            </div>
+              background: themeStyles.levelColors[currentLevel],
+              borderRadius: '4px',
+              transition: 'width 0.3s ease'
+            }} />
           </div>
 
-          {/* Question */}
-          <h4 style={{
-            color: themeStyles.textColor,
-            marginBottom: '25px',
-            fontSize: theme === 'kids' ? '1.3rem' : '1.1rem',
-            lineHeight: '1.6'
+          {/* Question Card */}
+          <div style={{
+            background: themeStyles.cardBg,
+            border: `1px solid ${themeStyles.cardBorder}`,
+            borderRadius: themeStyles.borderRadius,
+            padding: '32px 24px',
+            marginBottom: '24px'
           }}>
-            {currentQuestionText}
-          </h4>
+            <h4 style={{
+              color: themeStyles.textPrimary,
+              fontSize: '18px',
+              fontWeight: '600',
+              lineHeight: '1.6',
+              margin: 0
+            }}>
+              {currentQuestionText}
+            </h4>
+          </div>
 
-          {/* Options */}
-          <div style={{ display: 'grid', gap: '15px', marginBottom: '20px' }}>
+          {/* Answer Options */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
             {currentOptions.map((opt, i) => {
               const optionText = typeof opt === 'string' ? opt.trim() : opt;
               if (!optionText) return null;
 
-              const isAnswered = localAnswers[localIndex] !== -1;
-              const correctIndex = currentQ?.correct_option_index ?? currentQ?.correct;
-              const isSelected = localAnswers[localIndex] === i;
+              const isSelected = selectedAnswer === i;
               const isCorrect = i === correctIndex;
+              const showCorrect = showFeedback && isCorrect;
+              const showWrong = showFeedback && isSelected && !isCorrect;
 
-              let backgroundColor = theme === 'mature' ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.9)';
-              let borderColor = 'transparent';
-              let textColor = theme === 'mature' ? themeStyles.textColor : '#333';
-              let animStyle = '';
+              let bgColor = themeStyles.optionBg;
+              let borderColor = themeStyles.cardBorder;
+              let textColor = themeStyles.textPrimary;
 
-              if (isAnswered) {
-                if (isCorrect) {
-                  backgroundColor = theme === 'mature' ? 'rgba(72, 187, 120, 0.2)' : '#d4edda';
-                  borderColor = '#28a745';
-                  textColor = theme === 'mature' ? '#68D391' : '#155724';
-                  animStyle = 'correctPop 0.3s ease-out';
-                } else if (isSelected) {
-                  backgroundColor = theme === 'mature' ? 'rgba(245, 101, 101, 0.2)' : '#ffcccc';
-                  borderColor = '#dc3545';
-                  textColor = theme === 'mature' ? '#FC8181' : '#721c24';
-                  animStyle = 'shake 0.3s ease-out';
-                }
-              } else if (isSelected) {
-                backgroundColor = `${themeStyles.primary}30`;
+              if (showCorrect) {
+                bgColor = themeStyles.correctBg;
+                borderColor = '#58CC02';
+                textColor = isLightTheme ? '#2d5016' : '#a3e635';
+              } else if (showWrong) {
+                bgColor = themeStyles.wrongBg;
+                borderColor = '#FF4B4B';
+                textColor = isLightTheme ? '#7f1d1d' : '#fca5a5';
+              } else if (isSelected && !showFeedback) {
                 borderColor = themeStyles.primary;
+                bgColor = isLightTheme ? '#e0f2fe' : 'rgba(28, 176, 246, 0.15)';
               }
 
               return (
                 <button
                   key={i}
-                  onClick={() => !isAnswered && handleLocalAnswer(i)}
-                  disabled={isAnswered}
+                  className={`quiz-option ${showFeedback ? 'answered' : ''} ${showCorrect ? 'correct' : ''} ${showWrong ? 'wrong' : ''}`}
+                  onClick={() => handleSelectAnswer(i)}
+                  disabled={showFeedback}
                   style={{
-                    background: backgroundColor,
-                    color: textColor,
-                    padding: theme === 'kids' ? '20px 25px' : '16px 20px',
-                    borderRadius: themeStyles.borderRadius,
+                    width: '100%',
+                    padding: '16px 20px',
+                    borderRadius: '12px',
                     border: `2px solid ${borderColor}`,
-                    textAlign: 'left',
-                    cursor: isAnswered ? 'default' : 'pointer',
-                    transition: 'all 0.2s ease',
-                    fontSize: theme === 'kids' ? '1.05rem' : '1rem',
+                    background: bgColor,
+                    color: textColor,
+                    fontSize: '15px',
                     fontWeight: '500',
+                    textAlign: 'left',
+                    cursor: showFeedback ? 'default' : 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '12px',
-                    animation: animStyle,
-                    transform: !isAnswered ? 'scale(1)' : 'scale(1)',
-                    boxShadow: isSelected && !isAnswered
-                      ? `0 4px 20px ${themeStyles.primary}40`
-                      : 'none'
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isAnswered) {
-                      e.currentTarget.style.transform = 'translateX(8px)';
-                      e.currentTarget.style.boxShadow = `0 4px 20px ${themeStyles.primary}30`;
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isAnswered) {
-                      e.currentTarget.style.transform = 'translateX(0)';
-                      e.currentTarget.style.boxShadow = isSelected ? `0 4px 20px ${themeStyles.primary}40` : 'none';
-                    }
+                    gap: '14px'
                   }}
                 >
                   <span style={{
                     width: '32px',
                     height: '32px',
                     borderRadius: '50%',
-                    background: isAnswered && isCorrect
-                      ? '#28a745'
-                      : isAnswered && isSelected
-                        ? '#dc3545'
+                    background: showCorrect
+                      ? '#58CC02'
+                      : showWrong
+                        ? '#FF4B4B'
                         : isSelected
                           ? themeStyles.primary
-                          : 'rgba(0,0,0,0.1)',
-                    color: isSelected || isAnswered ? 'white' : 'inherit',
+                          : (isLightTheme ? '#e5e5e5' : 'rgba(255,255,255,0.1)'),
+                    color: (showCorrect || showWrong || isSelected) ? 'white' : themeStyles.textSecondary,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     fontWeight: '700',
-                    fontSize: '0.9rem',
-                    transition: 'all 0.2s ease'
+                    fontSize: '14px',
+                    flexShrink: 0
                   }}>
-                    {isAnswered && isCorrect ? '✓' : isAnswered && isSelected ? '✗' : String.fromCharCode(65 + i)}
+                    {showCorrect ? '✓' : showWrong ? '✗' : String.fromCharCode(65 + i)}
                   </span>
                   {optionText}
                 </button>
@@ -546,35 +470,41 @@ const QuizView = ({
             })}
           </div>
 
-          {/* Explanation */}
-          {localAnswers[localIndex] !== -1 && (
+          {/* Feedback & Explanation */}
+          {showFeedback && (
             <div style={{
-              marginTop: '20px',
-              padding: '20px',
-              background: theme === 'mature' ? 'rgba(255,255,255,0.05)' : '#f8f9fa',
+              background: selectedAnswer === correctIndex
+                ? themeStyles.correctBg
+                : themeStyles.wrongBg,
+              border: `1px solid ${selectedAnswer === correctIndex ? '#58CC02' : '#FF4B4B'}50`,
               borderRadius: themeStyles.borderRadius,
-              animation: 'slideIn 0.3s ease-out',
-              borderLeft: `4px solid ${localAnswers[localIndex] === (currentQ?.correct_option_index ?? currentQ?.correct) ? '#28a745' : '#dc3545'}`
+              padding: '20px',
+              marginBottom: '24px',
+              animation: 'fadeIn 0.3s ease'
             }}>
               <p style={{
-                fontWeight: 'bold',
-                color: localAnswers[localIndex] === (currentQ?.correct_option_index ?? currentQ?.correct) ? '#28a745' : '#dc3545',
-                marginBottom: '10px',
-                fontSize: '1.1rem'
+                fontWeight: '700',
+                color: selectedAnswer === correctIndex ? '#58CC02' : '#FF4B4B',
+                marginBottom: currentQ?.explanation ? '12px' : 0,
+                fontSize: '15px'
               }}>
-                {localAnswers[localIndex] === (currentQ?.correct_option_index ?? currentQ?.correct)
-                  ? '✅ Correct! Great job!'
-                  : '❌ Not quite right'}
+                {selectedAnswer === correctIndex ? '✅ Correct!' : '❌ Not quite right'}
               </p>
-              <p style={{ color: theme === 'mature' ? '#A0AEC0' : '#4a5568', marginBottom: '5px' }}>
-                <strong>Correct Answer:</strong> {currentOptions[(currentQ?.correct_option_index ?? currentQ?.correct)]}
-              </p>
+              {selectedAnswer !== correctIndex && (
+                <p style={{
+                  color: themeStyles.textSecondary,
+                  fontSize: '14px',
+                  marginBottom: currentQ?.explanation ? '12px' : 0
+                }}>
+                  The correct answer was: <strong>{currentOptions[correctIndex]}</strong>
+                </p>
+              )}
               {currentQ?.explanation && (
                 <p style={{
-                  marginTop: '10px',
-                  color: theme === 'mature' ? '#A0AEC0' : '#4a5568',
+                  color: themeStyles.textSecondary,
+                  fontSize: '14px',
                   fontStyle: 'italic',
-                  lineHeight: '1.6'
+                  margin: 0
                 }}>
                   💡 {currentQ.explanation}
                 </p>
@@ -583,19 +513,41 @@ const QuizView = ({
           )}
 
           {/* Navigation */}
-          {localAnswers[localIndex] !== -1 && (
-            <div className="button-group" style={{ marginTop: '25px' }}>
+          {showFeedback && (
+            <div style={{ textAlign: 'center' }}>
               {localIndex < localQuestions.length - 1 ? (
-                <button className="big-button" onClick={handleLocalNext}>
-                  Next Question ➡️
+                <button
+                  onClick={handleNextQuestion}
+                  style={{
+                    padding: '14px 36px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: themeStyles.primary,
+                    color: 'white',
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    boxShadow: '0 3px 0 0 #1890d0'
+                  }}
+                >
+                  Next Question →
                 </button>
               ) : (
                 <button
-                  className="success-button"
                   onClick={submitLevel}
-                  style={{ animation: 'pulse 1s ease-in-out infinite' }}
+                  style={{
+                    padding: '14px 36px',
+                    borderRadius: '12px',
+                    border: 'none',
+                    background: '#58CC02',
+                    color: 'white',
+                    fontSize: '16px',
+                    fontWeight: '700',
+                    cursor: 'pointer',
+                    boxShadow: '0 3px 0 0 #46a302'
+                  }}
                 >
-                  📝 Finish {currentLevel} Level
+                  Finish {currentLevel.charAt(0).toUpperCase() + currentLevel.slice(1)} Level 🎉
                 </button>
               )}
             </div>
@@ -605,110 +557,126 @@ const QuizView = ({
 
       {/* Results Screen */}
       {showResults && (
-        <div
-          className="kid-card"
-          style={{
-            textAlign: 'center',
-            animation: 'slideIn 0.5s ease-out',
-            background: theme === 'mature'
-              ? 'rgba(255,255,255,0.05)'
-              : `linear-gradient(135deg, ${themeStyles.primary}15, ${themeStyles.secondary}15)`,
-            backdropFilter: 'blur(20px)'
-          }}
-        >
-          <div style={{
-            fontSize: '4rem',
-            marginBottom: '15px',
-            animation: 'floatEmoji 2s ease-in-out infinite'
-          }}>
-            🎉
-          </div>
+        <div style={{
+          background: themeStyles.cardBg,
+          border: `1px solid ${themeStyles.cardBorder}`,
+          borderRadius: themeStyles.borderRadius,
+          padding: '48px 32px',
+          textAlign: 'center',
+          animation: 'fadeIn 0.4s ease'
+        }}>
+          <div style={{ fontSize: '64px', marginBottom: '20px' }}>🎉</div>
 
-          <h4 style={{
-            color: themeStyles.primary,
-            marginBottom: '25px',
-            fontSize: theme === 'kids' ? '1.8rem' : '1.5rem'
+          <h3 style={{
+            color: themeStyles.textPrimary,
+            fontSize: '1.4rem',
+            fontWeight: '700',
+            marginBottom: '12px'
           }}>
-            {currentLevel.toUpperCase()} Level Complete!
-          </h4>
+            {currentLevel.charAt(0).toUpperCase() + currentLevel.slice(1)} Level Complete!
+          </h3>
 
+          {/* Score Cards */}
           <div style={{
             display: 'flex',
             justifyContent: 'center',
-            gap: '30px',
-            marginBottom: '25px',
+            gap: '20px',
+            marginBottom: '32px',
+            marginTop: '32px',
             flexWrap: 'wrap'
           }}>
-            {/* Score */}
             <div style={{
               background: `linear-gradient(135deg, ${themeStyles.primary}, ${themeStyles.secondary})`,
-              padding: '25px 40px',
-              borderRadius: theme === 'kids' ? '25px' : '15px',
-              animation: 'scoreCount 0.5s ease-out'
+              padding: '24px 36px',
+              borderRadius: '16px',
+              minWidth: '120px'
             }}>
-              <div style={{
-                fontSize: theme === 'kids' ? '2.5rem' : '2rem',
-                fontWeight: 'bold',
-                color: 'white'
-              }}>
+              <div style={{ fontSize: '32px', fontWeight: '800', color: 'white' }}>
                 {localResults.score}
               </div>
-              <div style={{ fontSize: '0.9rem', color: 'rgba(255,255,255,0.8)' }}>
+              <div style={{ fontSize: '13px', color: 'rgba(255,255,255,0.8)', fontWeight: '600' }}>
                 Score
               </div>
             </div>
 
-            {/* Coins */}
             <div style={{
-              background: 'linear-gradient(135deg, #f7971e, #ffd200)',
-              padding: '25px 40px',
-              borderRadius: theme === 'kids' ? '25px' : '15px',
-              animation: 'scoreCount 0.5s ease-out 0.2s both'
+              background: 'linear-gradient(135deg, #FFC800, #FF9600)',
+              padding: '24px 36px',
+              borderRadius: '16px',
+              minWidth: '120px'
             }}>
-              <div style={{
-                fontSize: theme === 'kids' ? '2.5rem' : '2rem',
-                fontWeight: 'bold',
-                color: '#8B4513'
-              }}>
+              <div style={{ fontSize: '32px', fontWeight: '800', color: '#5c4813' }}>
                 +{localResults.coins}
               </div>
-              <div style={{ fontSize: '0.9rem', color: '#8B4513' }}>
-                🪙 Coins
+              <div style={{ fontSize: '13px', color: '#7c6520', fontWeight: '600' }}>
+                Coins 🪙
               </div>
             </div>
           </div>
 
           <p style={{
-            fontSize: '1.2rem',
-            fontWeight: '600',
             color: themeStyles.primary,
-            marginBottom: '25px'
+            fontSize: '16px',
+            fontWeight: '600',
+            marginBottom: '32px'
           }}>
             {localResults.message}
           </p>
 
+          {/* Action Buttons */}
           <div style={{
             display: 'flex',
-            gap: '15px',
             justifyContent: 'center',
+            gap: '12px',
             flexWrap: 'wrap'
           }}>
             {currentLevel === 'basic' && allQuizData?.medium && (
-              <button className="big-button" onClick={goToNextLevel}>
-                🚀 Go to Medium Level
+              <button
+                onClick={goToNextLevel}
+                style={{
+                  padding: '14px 28px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: themeStyles.levelColors.medium,
+                  color: 'white',
+                  fontSize: '15px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  boxShadow: '0 3px 0 0 #cc7a00'
+                }}
+              >
+                🔥 Try Medium Level
               </button>
             )}
             {currentLevel === 'medium' && allQuizData?.hard && (
-              <button className="big-button" onClick={goToNextLevel}>
-                🔥 Go to Hard Level
+              <button
+                onClick={goToNextLevel}
+                style={{
+                  padding: '14px 28px',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: themeStyles.levelColors.hard,
+                  color: 'white',
+                  fontSize: '15px',
+                  fontWeight: '700',
+                  cursor: 'pointer',
+                  boxShadow: '0 3px 0 0 #cc3c3c'
+                }}
+              >
+                💎 Try Hard Level
               </button>
             )}
             <button
-              className="warning-button"
-              onClick={() => {
-                setAllQuizData(null);
-                setLocalResults(null);
-                soundManager.playClickSound();
+              onClick={resetQuiz}
+              style={{
+                padding: '14px 28px',
+                borderRadius: '12px',
+                border: `2px solid ${themeStyles.cardBorder}`,
+                background: 'transparent',
+                color: themeStyles.textPrimary,
+                fontSize: '15px',
+                fontWeight: '700',
+                cursor: 'pointer'
               }}
             >
               🔄 Play Again

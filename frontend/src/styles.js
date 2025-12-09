@@ -23,10 +23,11 @@ export const getThemedStyles = (themeName = 'teen') => {
     box-sizing: border-box;
 }
 
+
 body {
     font-family: ${theme.fonts.primary};
-    background: ${theme.colors.background};
-    background-attachment: fixed;
+    background: url('/assets/${themeName === 'kids' ? 'kids_bg.png' : themeName === 'teen' ? 'teen_bg.png' : 'mature_bg.png'}') no-repeat center center fixed;
+    background-size: cover;
     min-height: 100vh;
     line-height: 1.6;
     overflow-x: hidden;
@@ -40,10 +41,10 @@ body {
     margin: 0 auto;
     padding: 20px;
     position: relative;
+    z-index: 1;
 }
 
-/* Theme-specific background animations */
-${themeName === 'kids' ? `
+/* Overlay for better text readability */
 .container::before {
     content: '';
     position: fixed;
@@ -51,83 +52,16 @@ ${themeName === 'kids' ? `
     left: 0;
     width: 100%;
     height: 100%;
-    background: 
-        radial-gradient(circle at 20% 20%, rgba(255, 107, 157, 0.15) 2px, transparent 2px),
-        radial-gradient(circle at 80% 80%, rgba(78, 205, 196, 0.15) 2px, transparent 2px),
-        radial-gradient(circle at 50% 50%, rgba(255, 230, 109, 0.1) 3px, transparent 3px);
-    background-size: 60px 60px, 90px 90px, 120px 120px;
-    animation: floatKids 15s ease-in-out infinite;
+    background: ${themeName === 'kids'
+            ? 'rgba(255, 255, 255, 0.4)'
+            : themeName === 'teen'
+                ? 'rgba(19, 31, 36, 0.7)'
+                : 'rgba(0, 0, 0, 0.6)'};
     pointer-events: none;
     z-index: -1;
+    backdrop-filter: blur(3px);
 }
 
-@keyframes floatKids {
-    0%, 100% { transform: translateY(0px) rotate(0deg); }
-    25% { transform: translateY(-15px) rotate(3deg); }
-    50% { transform: translateY(-25px) rotate(-3deg); }
-    75% { transform: translateY(-10px) rotate(2deg); }
-}
-
-/* Floating decorations for kids */
-.floating-decoration {
-    position: fixed;
-    font-size: 30px;
-    animation: floatEmoji 8s ease-in-out infinite;
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0.6;
-}
-
-@keyframes floatEmoji {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50% { transform: translateY(-30px) rotate(15deg); }
-}
-` : themeName === 'teen' ? `
-.container::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: 
-        radial-gradient(circle at 20% 20%, rgba(102, 126, 234, 0.1) 1px, transparent 1px),
-        radial-gradient(circle at 80% 80%, rgba(118, 75, 162, 0.1) 1px, transparent 1px);
-    background-size: 50px 50px, 80px 80px;
-    animation: floatTeen 20s ease-in-out infinite;
-    pointer-events: none;
-    z-index: -1;
-}
-
-@keyframes floatTeen {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-15px); }
-}
-
-/* Glow effect for teen theme */
-.glow-effect {
-    box-shadow: 0 0 20px rgba(102, 126, 234, 0.4);
-    animation: glowPulse 2s ease-in-out infinite alternate;
-}
-
-@keyframes glowPulse {
-    0% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.4); }
-    100% { box-shadow: 0 0 40px rgba(102, 126, 234, 0.6); }
-}
-` : `
-/* Minimal background for mature theme */
-.container::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(180deg, rgba(0,0,0,0.1) 0%, transparent 50%);
-    pointer-events: none;
-    z-index: -1;
-}
-`}
 
 /* Main Title */
 .main-title {
@@ -754,6 +688,315 @@ h3 { font-size: ${theme.fonts.size.large}; }
     .nav-arrow.left { left: 0; }
     .nav-arrow.right { right: 0; }
     .flashcard-wrapper { padding: 0 40px; }
+}
+
+/* ==================== ENHANCED GLOBAL ANIMATIONS ==================== */
+
+/* Bounce Animation */
+@keyframes bounce {
+    0%, 20%, 53%, 80%, 100% {
+        transform: translateY(0);
+    }
+    40% {
+        transform: translateY(-20px);
+    }
+    60% {
+        transform: translateY(-10px);
+    }
+}
+
+.bounce {
+    animation: bounce 1s ease infinite;
+}
+
+/* Wobble Animation */
+@keyframes wobble {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-5deg); }
+    50% { transform: rotate(5deg); }
+    75% { transform: rotate(-3deg); }
+}
+
+.wobble:hover {
+    animation: wobble 0.5s ease;
+}
+
+/* Pulse Glow */
+@keyframes pulseGlow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(102, 126, 234, 0.4),
+                    0 0 10px rgba(102, 126, 234, 0.3),
+                    0 0 15px rgba(102, 126, 234, 0.2);
+    }
+    50% {
+        box-shadow: 0 0 10px rgba(102, 126, 234, 0.6),
+                    0 0 20px rgba(102, 126, 234, 0.4),
+                    0 0 30px rgba(102, 126, 234, 0.3);
+    }
+}
+
+.pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+}
+
+/* Shake Animation */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+.shake {
+    animation: shake 0.5s ease;
+}
+
+/* Scale Pop */
+@keyframes scalePop {
+    0% { transform: scale(0.95); opacity: 0.8; }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.scale-pop {
+    animation: scalePop 0.3s ease-out;
+}
+
+/* Ripple Effect for buttons */
+.ripple {
+    position: relative;
+    overflow: hidden;
+}
+
+.ripple::after {
+    content: '';
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 60%);
+    transform: scale(0);
+    opacity: 0;
+    transition: transform 0.5s ease, opacity 0.5s ease;
+}
+
+.ripple:active::after {
+    transform: scale(4);
+    opacity: 1;
+    transition: 0s;
+}
+
+/* Slide animations */
+@keyframes slideInUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInDown {
+    from { transform: translateY(-30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideInLeft {
+    from { transform: translateX(-30px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes slideInRight {
+    from { transform: translateX(30px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+.slide-in-up { animation: slideInUp 0.5s ease-out; }
+.slide-in-down { animation: slideInDown 0.5s ease-out; }
+.slide-in-left { animation: slideInLeft 0.5s ease-out; }
+.slide-in-right { animation: slideInRight 0.5s ease-out; }
+
+/* Rotate Animation */
+@keyframes rotate360 {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.rotate {
+    animation: rotate360 1s linear infinite;
+}
+
+/* Heartbeat Animation */
+@keyframes heartbeat {
+    0%, 100% { transform: scale(1); }
+    14% { transform: scale(1.1); }
+    28% { transform: scale(1); }
+    42% { transform: scale(1.1); }
+    70% { transform: scale(1); }
+}
+
+.heartbeat {
+    animation: heartbeat 1.5s ease-in-out infinite;
+}
+
+/* Float Animation */
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+.float {
+    animation: float 3s ease-in-out infinite;
+}
+
+/* Shimmer Effect */
+@keyframes shimmer {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+}
+
+.shimmer {
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
+    background-size: 200% 100%;
+    animation: shimmer 2s linear infinite;
+}
+
+/* Loading Spinner */
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(102, 126, 234, 0.2);
+    border-top-color: ${theme.colors.primary};
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+/* Typing Animation */
+@keyframes typing {
+    0%, 60%, 100% { width: 0; }
+    30% { width: 100%; }
+}
+
+/* Coin Flip */
+@keyframes coinFlip {
+    0% { transform: rotateY(0deg); }
+    100% { transform: rotateY(360deg); }
+}
+
+.coin-flip {
+    animation: coinFlip 1s ease-in-out;
+}
+
+/* Confetti Fall */
+@keyframes confettiFall {
+    0% {
+        transform: translateY(-100%) rotate(0deg);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(100vh) rotate(720deg);
+        opacity: 0;
+    }
+}
+
+/* Success Check Animation */
+@keyframes successCheck {
+    0% { transform: scale(0) rotate(-45deg); opacity: 0; }
+    50% { transform: scale(1.2) rotate(-45deg); }
+    100% { transform: scale(1) rotate(-45deg); opacity: 1; }
+}
+
+/* Error Shake */
+@keyframes errorShake {
+    0%, 100% { transform: translateX(0); }
+    20% { transform: translateX(-10px); }
+    40% { transform: translateX(10px); }
+    60% { transform: translateX(-10px); }
+    80% { transform: translateX(10px); }
+}
+
+/* Enhanced Tab Hover */
+.tab-nav:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+/* Enhanced Button Animations */
+.big-button:hover,
+.success-button:hover,
+.warning-button:hover {
+    transform: translateY(-4px) scale(1.02);
+}
+
+.big-button:active,
+.success-button:active,
+.warning-button:active {
+    transform: translateY(-2px) scale(1.01);
+    transition: transform 0.1s ease;
+}
+
+/* Enhanced Card Interactions */
+.kid-card {
+    transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.kid-card:hover {
+    transform: translateY(-8px);
+}
+
+/* Focus States */
+input:focus,
+select:focus,
+button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px ${theme.colors.primary}40;
+}
+
+/* Smooth Selection */
+::selection {
+    background: ${theme.colors.primary};
+    color: white;
+}
+
+/* Tooltip Animation */
+@keyframes tooltipAppear {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Progress Bar Animation */
+@keyframes progressPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+/* Achievement Unlock */
+@keyframes achievementUnlock {
+    0% { transform: scale(0) rotate(-180deg); opacity: 0; }
+    50% { transform: scale(1.2) rotate(10deg); }
+    100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.achievement-unlock {
+    animation: achievementUnlock 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* Stagger Animation Helper Classes */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+
+/* Accessibility - Reduce Motion */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
 }
 `;
 };
