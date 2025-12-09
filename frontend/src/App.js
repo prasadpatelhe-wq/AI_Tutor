@@ -350,6 +350,7 @@ const App = () => {
     setCurrentStudent(student);
     setUserGrade(student.grade_band);
     setUserBoard(student.board || 'CBSE'); // Default if missing
+    setCurrentScreen('selection'); // Go directly to subject selection for logged-in users
   };
 
   const handleRegisterSuccess = () => {
