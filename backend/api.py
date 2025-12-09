@@ -20,6 +20,7 @@ from backend.services.flashcard_service import save_flashcards_from_quiz, get_fl
 # -----------------------------------------------------------
 # Flashcard Endpoints
 # -----------------------------------------------------------
+import backend.models  # noqa: F401  # Ensure all models are registered with Base
 
 from backend.services.progress_service import update_progress, get_due_flashcards
 from fastapi import FastAPI, HTTPException
@@ -41,7 +42,6 @@ from backend.routes.meta_router import router as meta_router
 from backend.routes.students_router import router as students_router
 from backend.routes.subchapters_router import router as subchapters_router
 import logging
-import sqlite3
 
 # === Database Schema Migration ===
 def run_migrations():
@@ -54,58 +54,63 @@ def run_migrations():
         dialect = engine.url.get_backend_name()
 
         if dialect == "sqlite":
-            db_path = os.path.join(ROOT_DIR, "tutor.db")
-            conn = sqlite3.connect(db_path)
-            cursor = conn.cursor()
+            db_path = engine.url.database
+            if db_path and not os.path.isabs(db_path):
+                db_path = os.path.abspath(os.path.join(os.getcwd(), db_path))
 
-            # Ensure students table exists (create all tables if missing)
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='students'")
-            has_students = cursor.fetchone() is not None
-            if not has_students:
-                print("Creating database tables (students table missing)...")
-                Base.metadata.create_all(bind=engine)
-                conn.close()
-                return
-            
-            # Check if columns exist in students table
-            cursor.execute("PRAGMA table_info(students)")
-            columns = [info[1] for info in cursor.fetchall()]
+            conn = engine.raw_connection()
+            try:
+                cursor = conn.cursor()
 
-            if "name" not in columns:
-                print("Migrating: Adding name column to students table...")
-                cursor.execute("ALTER TABLE students ADD COLUMN name TEXT")
-                if "full_name" in columns:
-                    cursor.execute("UPDATE students SET name = full_name WHERE full_name IS NOT NULL")
-            
-            if "is_active" not in columns:
-                print("Migrating: Adding is_active column to students table...")
-                cursor.execute("ALTER TABLE students ADD COLUMN is_active INTEGER DEFAULT 1")
+                # Ensure students table exists (create all tables if missing)
+                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='students'")
+                has_students = cursor.fetchone() is not None
+                if not has_students:
+                    print(f"Creating database tables (students table missing)... [db={db_path or ':memory:'}]")
+                    Base.metadata.create_all(bind=engine)
+                    return
                 
-            if "password" not in columns:
-                print("Migrating: Adding password column to students table...")
-                cursor.execute("ALTER TABLE students ADD COLUMN password TEXT")
+                # Check if columns exist in students table
+                cursor.execute("PRAGMA table_info(students)")
+                columns = [info[1] for info in cursor.fetchall()]
 
-            if "board" not in columns:
-                print("Migrating: Adding board column to students table...")
-                cursor.execute("ALTER TABLE students ADD COLUMN board TEXT")
+                if "name" not in columns:
+                    print("Migrating: Adding name column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN name TEXT")
+                    if "full_name" in columns:
+                        cursor.execute("UPDATE students SET name = full_name WHERE full_name IS NOT NULL")
+                
+                if "is_active" not in columns:
+                    print("Migrating: Adding is_active column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN is_active INTEGER DEFAULT 1")
+                    
+                if "password" not in columns:
+                    print("Migrating: Adding password column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN password TEXT")
+
+                if "board" not in columns:
+                    print("Migrating: Adding board column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN board TEXT")
 
                 if "grade_band" not in columns:
                     print("Migrating: Adding grade_band column to students table...")
                     cursor.execute("ALTER TABLE students ADD COLUMN grade_band TEXT")
 
-            if "medium" not in columns:
-                print("Migrating: Adding medium column to students table...")
-                cursor.execute("ALTER TABLE students ADD COLUMN medium TEXT")
+                if "medium" not in columns:
+                    print("Migrating: Adding medium column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN medium TEXT")
 
-            # Flashcard subchapter support
-            cursor.execute("PRAGMA table_info(flashcard)")
-            flash_cols = [info[1] for info in cursor.fetchall()]
-            if "subchapter_id" not in flash_cols:
-                print("Migrating: Adding subchapter_id to flashcard table...")
-                cursor.execute("ALTER TABLE flashcard ADD COLUMN subchapter_id TEXT")
-                
-            conn.commit()
-            conn.close()
+                # Flashcard subchapter support
+                cursor.execute("PRAGMA table_info(flashcard)")
+                flash_cols = [info[1] for info in cursor.fetchall()]
+                if "subchapter_id" not in flash_cols:
+                    print("Migrating: Adding subchapter_id to flashcard table...")
+                    cursor.execute("ALTER TABLE flashcard ADD COLUMN subchapter_id TEXT")
+                    
+                conn.commit()
+            finally:
+                conn.close()
+
             print("Database schema check completed.")
             return
 
