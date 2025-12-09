@@ -7,6 +7,7 @@ import { fetchSubjects } from "./meta";
 import WelcomeView from "./views/WelcomeView";
 import SelectionView from "./views/SelectionView";
 import ChapterSelectionView from "./views/ChapterSelectionView";
+import SubchapterSelectionView from "./views/SubchapterSelectionView";
 import DashboardView from "./views/DashboardView";
 import VideoView from "./views/VideoView";
 import QuizView from "./views/QuizView";
@@ -91,7 +92,11 @@ const App = () => {
     fetchChaptersFromDB,
     dbChapters,
     selectedDbChapter,
-    setSelectedDbChapter
+    setSelectedDbChapter,
+    fetchSubchaptersFromDB,
+    dbSubchapters,
+    selectedDbSubchapter,
+    setSelectedDbSubchapter,
   } = useContext(SyllabusContext);
 
   // Loading States
@@ -217,7 +222,15 @@ const App = () => {
   };
 
   const generateQuiz = async () => {
-    return await apiGenerateQuiz(selectedDbChapter, userSubject, userGrade, setLoading, currentStudent?.id);
+    return await apiGenerateQuiz(
+      selectedDbChapter,
+      selectedDbSubchapter,
+      dbSubchapters,
+      userSubject,
+      userGrade,
+      setLoading,
+      currentStudent?.id
+    );
   };
 
   const calculateQuizScore = async (answers, questions, passedAddCoins, passedSetGameState, difficulty, chapterId, subjectId) => {
@@ -288,6 +301,17 @@ const App = () => {
     }
   };
 
+  const handleChapterContinue = async () => {
+    if (!selectedDbChapter) return;
+    try {
+      await fetchSubchaptersFromDB(selectedDbChapter);
+      setCurrentScreen("selectSubchapter");
+    } catch (error) {
+      console.error("Subchapter fetch error:", error);
+      setSelectionStatus("❌ Could not load subchapters.");
+    }
+  };
+
   const loadVideoForSubject = async () => {
     const video = await getVideoForSubject(userSubject);
     setVideoTitle(`Now Playing: ${video.title}`);
@@ -315,6 +339,10 @@ const App = () => {
   };
 
   const startQuizSession = async () => {
+    if (!selectedDbSubchapter) {
+      console.warn("No subchapter selected for quiz.");
+      return null;
+    }
     const data = await generateQuiz();
     const basicQuestions = data?.basic || [];
     setQuizQuestions(basicQuestions);
@@ -417,7 +445,16 @@ const App = () => {
           selectedDbChapter={selectedDbChapter}
           setSelectedDbChapter={setSelectedDbChapter}
           dbChapters={dbChapters}
-          setCurrentScreen={setCurrentScreen}
+          goToSubchapter={handleChapterContinue}
+        />
+      )}
+
+      {currentScreen === "selectSubchapter" && (
+        <SubchapterSelectionView
+          selectedDbSubchapter={selectedDbSubchapter}
+          setSelectedDbSubchapter={setSelectedDbSubchapter}
+          dbSubchapters={dbSubchapters}
+          onContinue={() => setCurrentScreen("main")}
         />
       )}
 

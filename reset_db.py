@@ -26,32 +26,59 @@ from backend.database import Base, engine
 # ------------------------------------------------------
 from backend.models import (
     board,
-    chapter,
-    flashcard,
-    grade,
-    question,
-    quiz,
-    roadmap,
-    roadmap_quiz_map,
-    roadmap_step,
-    student_progress,
+    syllabus,
+    language,
+    language_level,
+    syllabus_language_option,
     students,
+    student_language_selection,
     subject,
-    syllabus_subject,
-    textbook,
-    topic,
+    chapter,
+    subchapter,
+    quiz,
+    question,
+    flashcard,
+    scorecard,
+    student_progress,
+    # grade,
+    # roadmap,
+    # roadmap_quiz_map,
+    # roadmap_step,
+    # student_progress,
+    # syllabus_subject,
+    # textbook,
+    # topic,
 )
 
 # ------------------------------------------------------
 # 4) Drop all existing tables
 # ------------------------------------------------------
-print("⚠️  Dropping ALL tables...")
-Base.metadata.drop_all(bind=engine)
+# ------------------------------------------------------
+# 4) Drop all existing tables
+# ------------------------------------------------------
+print("Dropping ALL tables...")
+from sqlalchemy import text
+
+with engine.connect() as connection:
+    # Disable FK checks for MySQL/MariaDB
+    if "mysql" in str(engine.url):
+        connection.execute(text("SET FOREIGN_KEY_CHECKS = 0;"))
+    
+    # For SQLite, it's usually fine, but strictly:
+    if "sqlite" in str(engine.url):
+        connection.execute(text("PRAGMA foreign_keys = OFF;"))
+
+    Base.metadata.drop_all(bind=connection)
+
+    if "mysql" in str(engine.url):
+        connection.execute(text("SET FOREIGN_KEY_CHECKS = 1;"))
+    if "sqlite" in str(engine.url):
+        connection.execute(text("PRAGMA foreign_keys = ON;"))
 
 # ------------------------------------------------------
 # 5) Create all tables fresh
 # ------------------------------------------------------
-print("🛠  Creating ALL tables...")
+print("Creating ALL tables...")
 Base.metadata.create_all(bind=engine)
 
-print("✅  Database reset complete!")
+print("Database reset complete!")

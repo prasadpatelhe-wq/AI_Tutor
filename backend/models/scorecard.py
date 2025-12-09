@@ -2,14 +2,15 @@ from backend.database import Base
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
+import uuid
 
 class Scorecard(Base):
     __tablename__ = "scorecard"
 
-    id = Column(Integer, primary_key=True, index=True)
-    student_id = Column(Integer, ForeignKey("students.id"), nullable=True) # Nullable for now if no student login
-    subject_id = Column(Integer, ForeignKey("subjects.id"))
-    chapter_id = Column(Integer, ForeignKey("chapters.id"))
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    student_id = Column(String(36), ForeignKey("students.id"), nullable=True)
+    subject_id = Column(String(36), ForeignKey("subjects.id"))
+    chapter_id = Column(String(36), ForeignKey("chapters.id"))
     
     score = Column(Integer)
     total_questions = Column(Integer)

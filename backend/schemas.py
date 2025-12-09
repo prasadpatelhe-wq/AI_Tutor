@@ -15,6 +15,9 @@ class QuizRequest(BaseModel):
     chapter_id: str
     chapter_title: str
     chapter_summary: str
+    subchapter_id: str | None = None
+    subchapter_title: str | None = None
+    subchapter_summary: str | None = None
     num_questions: int = 5
     difficulty: str = "basic"
 
@@ -50,6 +53,7 @@ class StudentRegisterRequest(BaseModel):
     password: str
     grade_band: str
     board: str = "CBSE"  # Default to CBSE if not provided
+    medium: str | None = None  # Language/medium of instruction
 
 class StudentLoginRequest(BaseModel):
     email: str

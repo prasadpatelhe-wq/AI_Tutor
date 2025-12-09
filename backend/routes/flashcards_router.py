@@ -42,8 +42,8 @@ def get_db():
 
 # --- Request Models ---
 class ProgressRequest(BaseModel):
-    student_id: int
-    flashcard_id: int
+    student_id: str
+    flashcard_id: str
     correct: bool
 
 
@@ -67,9 +67,9 @@ def api_save_flashcards_from_quiz(req: QuizRequest, student_id: int = 1):
         result = AI_TUTOR.generate_all_quizzes(
             subject=req.subject,
             grade_band=req.grade_band,
-            chapter_id=req.chapter_id,
-            chapter_title=req.chapter_title,
-            chapter_summary=req.chapter_summary,
+            chapter_id=req.subchapter_id or req.chapter_id,
+            chapter_title=req.subchapter_title or req.chapter_title,
+            chapter_summary=req.subchapter_summary or req.chapter_summary,
         )
 
         # Save "basic" flashcards
@@ -77,10 +77,12 @@ def api_save_flashcards_from_quiz(req: QuizRequest, student_id: int = 1):
         response = save_flashcards_from_quiz(
             quiz_data=basic_quiz,
             subject_name=req.subject,
-            chapter_title=req.chapter_title,
+            chapter_title=req.subchapter_title or req.chapter_title,
+            chapter_summary=req.subchapter_summary or req.chapter_summary,
             db=db,
             student_id=student_id,  # ✅ link flashcards to student
-            chapter_id=req.chapter_id # ✅ Pass chapter_id
+            chapter_id=req.chapter_id,  # ✅ Pass chapter_id
+            subchapter_id=req.subchapter_id,
         )
 
         return {
@@ -100,7 +102,7 @@ def api_save_flashcards_from_quiz(req: QuizRequest, student_id: int = 1):
 # 2️⃣ Get flashcards by subject and chapter (global or per student)
 # ----------------------------------------------------------
 @router.get("/get_flashcards")
-def api_get_flashcards(subject: str, chapter: str, student_id: int | None = None):
+def api_get_flashcards(subject: str, chapter: str, student_id: str | None = None):
     """
     Retrieve flashcards for a given subject and chapter.
     If `student_id` is provided, return only that student's flashcards.
@@ -117,7 +119,7 @@ def api_get_flashcards(subject: str, chapter: str, student_id: int | None = None
 # 3️⃣ Get flashcards belonging to a student
 # ----------------------------------------------------------
 @router.get("/get_flashcards_by_student")
-def api_get_flashcards_by_student(student_id: int, db: Session = Depends(get_db)):
+def api_get_flashcards_by_student(student_id: str, db: Session = Depends(get_db)):
     """
     Retrieve all flashcards associated with a specific student.
     Includes subject and chapter info for frontend display.
@@ -169,7 +171,7 @@ def api_update_progress(req: ProgressRequest):
 # 5️⃣ Get due flashcards for spaced repetition
 # ----------------------------------------------------------
 @router.get("/due_flashcards")
-def api_get_due_flashcards(student_id: int):
+def api_get_due_flashcards(student_id: str):
     db = SessionLocal()
     try:
         cards = get_due_flashcards(student_id, db)
@@ -178,7 +180,9 @@ def api_get_due_flashcards(student_id: int):
         db.close()
 
 @router.get("/chapter/{student_id}/{chapter_id}")
-def get_flashcards_by_chapter(student_id: int, chapter_id: int, db: Session = Depends(get_db)):
+def get_flashcards_by_chapter(student_id: str, chapter_id: str, db: Session = Depends(get_db)):
+    from backend.models.chapter import Chapter
+
     flashcards = (
         db.query(Flashcard)
         .filter(
@@ -188,14 +192,20 @@ def get_flashcards_by_chapter(student_id: int, chapter_id: int, db: Session = De
         .all()
     )
 
-    return [
-        {
-            "id": f.id,
-            "question": f.question_text,
-            "answer": f.correct_option,
-            "explanation": f.explanation,
-            "difficulty": f.difficulty,
-            "created_at": f.created_at
-        }
-        for f in flashcards
-    ]
+    chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    chapter_title = chapter.title if chapter else ""
+
+    return {
+        "chapter_title": chapter_title,
+        "flashcards": [
+            {
+                "id": f.id,
+                "question": f.question_text,
+                "answer": f.correct_option,
+                "explanation": f.explanation,
+                "difficulty": f.difficulty,
+                "created_at": f.created_at
+            }
+            for f in flashcards
+        ]
+    }

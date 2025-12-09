@@ -1,29 +1,34 @@
 import React, { useState, useEffect } from 'react';
 import { registerStudent } from '../api';
-import { fetchGrades, fetchBoards } from '../meta';
+import { fetchGrades, fetchBoards, fetchLanguages } from '../meta';
 
 const RegisterView = ({ onRegisterSuccess, onNavigateToLogin }) => {
     const [formData, setFormData] = useState({
         name: '',
         email: '',
         password: '',
+        confirmPassword: '',
         grade_band: '',
-        board: ''
+        board: '',
+        medium: ''
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [grades, setGrades] = useState([]);
     const [boards, setBoards] = useState([]);
+    const [languages, setLanguages] = useState([]);
 
     useEffect(() => {
         const loadMeta = async () => {
             try {
-                const [g, b] = await Promise.all([fetchGrades(), fetchBoards()]);
+                const [g, b, langs] = await Promise.all([fetchGrades(), fetchBoards(), fetchLanguages()]);
                 setGrades(g.data);
                 setBoards(b.data);
+                setLanguages(langs.data);
                 // Set defaults if available
                 if (g.data.length > 0) setFormData(prev => ({ ...prev, grade_band: g.data[0].name }));
                 if (b.data.length > 0) setFormData(prev => ({ ...prev, board: b.data[0].name }));
+                if (langs.data.length > 0) setFormData(prev => ({ ...prev, medium: langs.data[0].name }));
             } catch (err) {
                 console.error("Failed to load metadata", err);
             }
@@ -39,6 +44,12 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin }) => {
         e.preventDefault();
         setError('');
         setLoading(true);
+
+        if (formData.password !== formData.confirmPassword) {
+            setError('Passwords do not match');
+            setLoading(false);
+            return;
+        }
 
         const result = await registerStudent(formData);
         setLoading(false);
@@ -134,6 +145,26 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin }) => {
                     </div>
 
                     <div style={{ marginBottom: '1rem' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Confirm Password</label>
+                        <input
+                            type="password"
+                            name="confirmPassword"
+                            value={formData.confirmPassword}
+                            onChange={handleChange}
+                            required
+                            style={{
+                                width: '100%',
+                                padding: '0.8rem',
+                                borderRadius: '5px',
+                                border: 'none',
+                                background: 'rgba(255, 255, 255, 0.2)',
+                                color: 'white',
+                                outline: 'none'
+                            }}
+                        />
+                    </div>
+
+                    <div style={{ marginBottom: '1rem' }}>
                         <label style={{ display: 'block', marginBottom: '0.5rem' }}>Board</label>
                         <select
                             name="board"
@@ -175,6 +206,29 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin }) => {
                             <option value="" disabled>Select Grade</option>
                             {grades.map(g => (
                                 <option key={g.id} value={g.name} style={{ color: 'black' }}>{g.display || g.name}</option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div style={{ marginBottom: '1.5rem' }}>
+                        <label style={{ display: 'block', marginBottom: '0.5rem' }}>Medium</label>
+                        <select
+                            name="medium"
+                            value={formData.medium}
+                            onChange={handleChange}
+                            style={{
+                                width: '100%',
+                                padding: '0.8rem',
+                                borderRadius: '5px',
+                                border: 'none',
+                                background: 'rgba(255, 255, 255, 0.2)',
+                                color: 'white',
+                                outline: 'none'
+                            }}
+                        >
+                            <option value="" disabled>Select Medium</option>
+                            {languages.map(l => (
+                                <option key={l.id} value={l.name} style={{ color: 'black' }}>{l.name}</option>
                             ))}
                         </select>
                     </div>
