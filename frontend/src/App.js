@@ -1,7 +1,7 @@
 import React, { useContext, useEffect, useState, useMemo } from "react";
 import FlashcardView from "./FlashcardView";
 import { SyllabusContext } from "./SyllabusContext";
-import { fetchSubjects } from "./meta";
+import { fetchSubjects, fetchGrades, fetchBoards, fetchLanguages } from "./meta";
 
 // Import modular components
 import WelcomeView from "./views/WelcomeView";
@@ -89,6 +89,10 @@ const App = () => {
   const [attentionStatus, setAttentionStatus] = useState('');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [subjects, setSubjects] = useState([]);
+  const [grades, setGrades] = useState([]);
+  const [boards, setBoards] = useState([]);
+  const [languages, setLanguages] = useState([]);
+  const [userLanguage, setUserLanguage] = useState('');
 
   const {
     fetchChaptersFromDB,
@@ -124,17 +128,25 @@ const App = () => {
     return getThemeFromGrade(userGrade || currentStudent?.grade_band);
   }, [userGrade, currentStudent?.grade_band]);
 
-  // Front page subject loader
+  // Front page data loader - fetch all dropdowns from database
   useEffect(() => {
     const loadDropdowns = async () => {
       try {
-        const [s] = await Promise.all([
+        const [subjectsRes, gradesRes, boardsRes, languagesRes] = await Promise.all([
           fetchSubjects(),
+          fetchGrades(),
+          fetchBoards(),
+          fetchLanguages(),
         ]);
 
-        setSubjects(s.data);
+        setSubjects(subjectsRes.data || []);
+        setGrades(gradesRes.data || []);
+        setBoards(boardsRes.data || []);
+        setLanguages(languagesRes.data || []);
+
+        console.log('Loaded from DB - Subjects:', subjectsRes.data?.length, 'Grades:', gradesRes.data?.length, 'Boards:', boardsRes.data?.length, 'Languages:', languagesRes.data?.length);
       } catch (err) {
-        console.error("Failed loading dropdowns:", err);
+        console.error("Failed loading dropdowns from database:", err);
       }
     };
 
@@ -509,11 +521,17 @@ const App = () => {
             setUserGrade={setUserGrade}
             userBoard={userBoard}
             setUserBoard={setUserBoard}
+            userLanguage={userLanguage}
+            setUserLanguage={setUserLanguage}
             userSubjectId={userSubjectId}
             handleSubjectChange={handleSubjectChange}
             subjects={subjects}
+            grades={grades}
+            boards={boards}
+            languages={languages}
             setupLearning={setupLearning}
             selectionStatus={selectionStatus}
+            theme={currentThemeName}
           />
         )}
 
@@ -523,6 +541,7 @@ const App = () => {
             setSelectedDbChapter={setSelectedDbChapter}
             dbChapters={dbChapters}
             goToSubchapter={handleChapterContinue}
+            theme={currentThemeName}
           />
         )}
 
@@ -532,6 +551,7 @@ const App = () => {
             setSelectedDbSubchapter={setSelectedDbSubchapter}
             dbSubchapters={dbSubchapters}
             onContinue={() => setCurrentScreen("main")}
+            theme={currentThemeName}
           />
         )}
 
@@ -573,6 +593,7 @@ const App = () => {
                 generateLearningRoadmap={generateLearningRoadmap}
                 loading={loading}
                 learningPlan={learningPlan}
+                theme={currentThemeName}
               />
             )}
 
@@ -614,6 +635,7 @@ const App = () => {
                 calculateQuizScore={calculateQuizScore}
                 addCoins={addCoins}
                 setGameState={setGameState}
+                theme={currentThemeName}
               />
             )}
 
@@ -621,6 +643,7 @@ const App = () => {
               <FlashcardView
                 studentId={currentStudent?.id}
                 chapterId={selectedDbChapter}
+                theme={currentThemeName}
               />
             )}
 
@@ -631,6 +654,7 @@ const App = () => {
                 buyPerk={buyPerk}
                 loading={loading}
                 perkResult={perkResult}
+                theme={currentThemeName}
               />
             )}
 

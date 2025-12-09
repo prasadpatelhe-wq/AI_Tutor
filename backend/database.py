@@ -1,4 +1,5 @@
 import os
+import pathlib
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -12,7 +13,9 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 if not DATABASE_URL:
     # Fallback for local dev if .env is missing or empty
-    DATABASE_URL = "sqlite:///./tutor.db"
+    # Use absolute path to ensure we always use the backend/tutor.db
+    DB_DIR = pathlib.Path(__file__).parent.resolve()
+    DATABASE_URL = f"sqlite:///{DB_DIR}/tutor.db"
 
 # ✅ Create SQLAlchemy engine
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})

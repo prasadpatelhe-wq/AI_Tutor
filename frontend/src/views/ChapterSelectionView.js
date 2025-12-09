@@ -1,33 +1,307 @@
 import React from 'react';
 
-const ChapterSelectionView = ({ selectedDbChapter, setSelectedDbChapter, dbChapters, goToSubchapter }) => {
+const ChapterSelectionView = ({ selectedDbChapter, setSelectedDbChapter, dbChapters, goToSubchapter, theme = 'teen' }) => {
+
+  // Theme-based styles
+  const getThemeStyles = () => {
+    switch (theme) {
+      case 'kids':
+        return {
+          primary: '#FF6B9D',
+          secondary: '#4ECDC4',
+          accent: '#FFE66D',
+          cardBg: 'linear-gradient(135deg, rgba(255, 107, 157, 0.1), rgba(78, 205, 196, 0.1))',
+          headerGradient: 'linear-gradient(135deg, #FF6B9D, #FF8E53, #FFE66D)',
+          borderRadius: '25px',
+          selectBg: 'rgba(255, 255, 255, 0.95)',
+          textColor: '#333',
+          fontSize: '1.1rem',
+          buttonGradient: 'linear-gradient(135deg, #FF6B9D, #FF8E53)',
+        };
+      case 'teen':
+        return {
+          primary: '#667eea',
+          secondary: '#764ba2',
+          accent: '#4fd1c5',
+          cardBg: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1))',
+          headerGradient: 'linear-gradient(135deg, #667eea, #764ba2)',
+          borderRadius: '20px',
+          selectBg: 'rgba(255, 255, 255, 0.95)',
+          textColor: '#333',
+          fontSize: '1rem',
+          buttonGradient: 'linear-gradient(135deg, #667eea, #764ba2)',
+        };
+      case 'mature':
+      default:
+        return {
+          primary: '#38B2AC',
+          secondary: '#4A5568',
+          accent: '#68D391',
+          cardBg: 'rgba(45, 55, 72, 0.8)',
+          headerGradient: 'linear-gradient(135deg, #38B2AC, #4FD1C5)',
+          borderRadius: '12px',
+          selectBg: 'rgba(45, 55, 72, 0.9)',
+          textColor: '#E2E8F0',
+          fontSize: '1rem',
+          buttonGradient: 'linear-gradient(135deg, #38B2AC, #4FD1C5)',
+        };
+    }
+  };
+
+  const themeStyles = getThemeStyles();
+
   return (
-    <div style={{ textAlign: "center", marginTop: "40px" }}>
-      <h2>📘 Select a Chapter</h2>
+    <div style={{
+      minHeight: '80vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: '40px 20px',
+    }}>
+      <style>{`
+        @keyframes slideUp {
+          from { opacity: 0; transform: translateY(30px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-10px); }
+        }
+        @keyframes pulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.05); }
+        }
+      `}</style>
 
-      <select
-        className="kid-card"
-        style={{ width: "80%", padding: "15px", marginTop: "20px" }}
-        value={selectedDbChapter || ""}
-        onChange={(e) => setSelectedDbChapter(e.target.value)}
-      >
-        <option value="">-- Choose a Chapter --</option>
-        {dbChapters.map((ch) => (
-          <option key={ch.id} value={ch.id}>{ch.title}</option>
-        ))}
-      </select>
+      {/* Header */}
+      <div style={{
+        textAlign: 'center',
+        marginBottom: '40px',
+        animation: 'slideUp 0.6s ease-out'
+      }}>
+        <div style={{
+          fontSize: theme === 'kids' ? '4rem' : '3rem',
+          marginBottom: '15px',
+          animation: 'float 3s ease-in-out infinite'
+        }}>
+          📘
+        </div>
+        <h2 style={{
+          background: themeStyles.headerGradient,
+          backgroundSize: '200% auto',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          animation: 'shimmer 3s linear infinite',
+          fontSize: theme === 'kids' ? '2.2rem' : '1.8rem',
+          fontWeight: '700',
+          margin: 0,
+          marginBottom: '10px'
+        }}>
+          Select Your Chapter
+        </h2>
+        <p style={{
+          color: theme === 'mature' ? '#A0AEC0' : '#666',
+          fontSize: theme === 'kids' ? '1.1rem' : '1rem',
+          margin: 0
+        }}>
+          Choose what you'd like to learn today! ✨
+        </p>
+      </div>
 
-      <button
-        className="big-button"
-        style={{ marginTop: "20px" }}
-        disabled={!selectedDbChapter}
-        onClick={goToSubchapter}
-      >
-        🚀 Next: Choose Subchapter
-      </button>
+      {/* Selection Card */}
+      <div style={{
+        width: '100%',
+        maxWidth: '600px',
+        padding: theme === 'kids' ? '40px' : '30px',
+        background: themeStyles.cardBg,
+        borderRadius: themeStyles.borderRadius,
+        boxShadow: theme === 'mature'
+          ? '0 10px 40px rgba(0,0,0,0.3)'
+          : '0 15px 50px rgba(102, 126, 234, 0.15)',
+        border: `1px solid ${themeStyles.primary}30`,
+        animation: 'slideUp 0.6s ease-out 0.1s both',
+        backdropFilter: 'blur(10px)'
+      }}>
+        <label style={{
+          display: 'block',
+          marginBottom: '15px',
+          fontWeight: '600',
+          color: themeStyles.primary,
+          fontSize: themeStyles.fontSize
+        }}>
+          📚 Available Chapters
+        </label>
+
+        {/* Custom Select Container */}
+        <div style={{
+          position: 'relative',
+          marginBottom: '25px'
+        }}>
+          <select
+            value={selectedDbChapter || ""}
+            onChange={(e) => setSelectedDbChapter(e.target.value)}
+            style={{
+              width: '100%',
+              padding: theme === 'kids' ? '18px 50px 18px 20px' : '15px 45px 15px 18px',
+              borderRadius: themeStyles.borderRadius,
+              border: `2px solid ${themeStyles.primary}40`,
+              fontSize: themeStyles.fontSize,
+              fontWeight: '500',
+              background: themeStyles.selectBg,
+              color: themeStyles.textColor,
+              cursor: 'pointer',
+              appearance: 'none',
+              WebkitAppearance: 'none',
+              MozAppearance: 'none',
+              outline: 'none',
+              transition: 'all 0.3s ease',
+              boxShadow: `0 4px 15px ${themeStyles.primary}15`
+            }}
+            onFocus={(e) => {
+              e.target.style.borderColor = themeStyles.primary;
+              e.target.style.boxShadow = `0 0 0 3px ${themeStyles.primary}30`;
+            }}
+            onBlur={(e) => {
+              e.target.style.borderColor = `${themeStyles.primary}40`;
+              e.target.style.boxShadow = `0 4px 15px ${themeStyles.primary}15`;
+            }}
+          >
+            <option value="">🎓 Choose a Chapter...</option>
+            {dbChapters.map((ch, index) => (
+              <option key={ch.id} value={ch.id} style={{
+                padding: '12px',
+                background: theme === 'mature' ? '#2D3748' : '#fff',
+                color: theme === 'mature' ? '#E2E8F0' : '#333'
+              }}>
+                {index + 1}. {ch.title}
+              </option>
+            ))}
+          </select>
+
+          {/* Custom dropdown arrow */}
+          <div style={{
+            position: 'absolute',
+            right: '18px',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            pointerEvents: 'none',
+            color: themeStyles.primary,
+            fontSize: '1.2rem'
+          }}>
+            ▼
+          </div>
+        </div>
+
+        {/* Chapter Preview */}
+        {selectedDbChapter && (
+          <div style={{
+            padding: '20px',
+            background: theme === 'mature' ? 'rgba(56, 178, 172, 0.1)' : `${themeStyles.primary}10`,
+            borderRadius: theme === 'kids' ? '15px' : '10px',
+            marginBottom: '25px',
+            border: `1px solid ${themeStyles.primary}30`,
+            animation: 'slideUp 0.3s ease-out'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px'
+            }}>
+              <span style={{ fontSize: '1.5rem' }}>✅</span>
+              <div>
+                <div style={{
+                  fontWeight: '600',
+                  color: themeStyles.primary,
+                  marginBottom: '4px'
+                }}>
+                  Selected Chapter
+                </div>
+                <div style={{
+                  color: theme === 'mature' ? '#E2E8F0' : '#555',
+                  fontSize: '0.95rem'
+                }}>
+                  {dbChapters.find(ch => String(ch.id) === String(selectedDbChapter))?.title || 'Unknown'}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Continue Button */}
+        <button
+          disabled={!selectedDbChapter}
+          onClick={goToSubchapter}
+          style={{
+            width: '100%',
+            padding: theme === 'kids' ? '18px 30px' : '15px 25px',
+            background: selectedDbChapter ? themeStyles.buttonGradient : '#ccc',
+            color: 'white',
+            border: 'none',
+            borderRadius: themeStyles.borderRadius,
+            fontSize: theme === 'kids' ? '1.2rem' : '1.1rem',
+            fontWeight: '700',
+            cursor: selectedDbChapter ? 'pointer' : 'not-allowed',
+            transition: 'all 0.3s ease',
+            boxShadow: selectedDbChapter
+              ? `0 8px 25px ${themeStyles.primary}40`
+              : 'none',
+            opacity: selectedDbChapter ? 1 : 0.6,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '10px'
+          }}
+          onMouseEnter={(e) => {
+            if (selectedDbChapter) {
+              e.target.style.transform = 'translateY(-3px)';
+              e.target.style.boxShadow = `0 12px 35px ${themeStyles.primary}50`;
+            }
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.transform = 'translateY(0)';
+            e.target.style.boxShadow = selectedDbChapter
+              ? `0 8px 25px ${themeStyles.primary}40`
+              : 'none';
+          }}
+        >
+          🚀 Next: Choose Subchapter
+        </button>
+      </div>
+
+      {/* Progress indicator */}
+      <div style={{
+        display: 'flex',
+        gap: '12px',
+        marginTop: '40px',
+        animation: 'slideUp 0.6s ease-out 0.2s both'
+      }}>
+        <div style={{
+          width: '40px',
+          height: '6px',
+          borderRadius: '3px',
+          background: themeStyles.primary
+        }} />
+        <div style={{
+          width: '40px',
+          height: '6px',
+          borderRadius: '3px',
+          background: `${themeStyles.primary}40`
+        }} />
+        <div style={{
+          width: '40px',
+          height: '6px',
+          borderRadius: '3px',
+          background: `${themeStyles.primary}40`
+        }} />
+      </div>
     </div>
   );
 };
 
 export default ChapterSelectionView;
-
