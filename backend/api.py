@@ -335,7 +335,6 @@ class ProgressRequest(BaseModel):
 app.include_router(flashcards_router)
 app.include_router(chapters_router)
 app.include_router(subjects_router)
-app.include_router(subjects_router)
 app.include_router(meta_router)
 app.include_router(students_router)
 app.include_router(subchapters_router)
@@ -348,7 +347,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(flashcards_router)
+
 
 
 @app.get("/health")
