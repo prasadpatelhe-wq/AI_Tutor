@@ -74,7 +74,8 @@ const App = () => {
   const [attentionAlert, setAttentionAlert] = useState('');
   const [socraticQuestion, setSocraticQuestion] = useState('');
   const [videoTitle, setVideoTitle] = useState('');
-  const [videoPlayerHtml, setVideoPlayerHtml] = useState('');
+  const [videoUrl, setVideoUrl] = useState('');
+  const [videoError, setVideoError] = useState('');
   const [quizIntro, setQuizIntro] = useState('');
   const [quizContainerVisible, setQuizContainerVisible] = useState(false);
   const [currentQuestion, setCurrentQuestion] = useState('');
@@ -227,6 +228,37 @@ const App = () => {
 
   const getCoinDisplay = () => `🏆 Score: ${gameState.total_score || 0}`;
 
+  const sanitizeVideoUrl = (rawUrl) => {
+    try {
+      if (!rawUrl) return null;
+      const parsed = new URL(rawUrl, window.location.origin);
+      const allowedHosts = ["www.youtube.com", "youtube.com", "youtu.be"];
+
+      if (parsed.protocol !== "https:") return null;
+
+      if (parsed.hostname === "youtu.be") {
+        const videoId = parsed.pathname.replace(/^\//, "");
+        return videoId ? `https://www.youtube.com/embed/${encodeURIComponent(videoId)}` : null;
+      }
+
+      if (!allowedHosts.includes(parsed.hostname)) return null;
+
+      if (parsed.pathname === "/watch") {
+        const watchId = parsed.searchParams.get("v");
+        return watchId ? `https://www.youtube.com/embed/${encodeURIComponent(watchId)}` : null;
+      }
+
+      if (parsed.pathname.startsWith("/embed/")) {
+        return `https://www.youtube.com${parsed.pathname}${parsed.search}`;
+      }
+
+      return null;
+    } catch (err) {
+      console.warn("Blocked invalid video URL", err);
+      return null;
+    }
+  };
+
   // API Wrapper Functions
   const verifyParentPin = async (pin) => {
     await apiVerifyParentPin(pin, setLoading, setGameState, setParentStatus);
@@ -340,10 +372,22 @@ const App = () => {
   };
 
   const loadVideoForSubject = async () => {
+    setVideoError("");
     const video = await getVideoForSubject(userSubject);
+    const safeUrl = sanitizeVideoUrl(video?.url);
+
+    if (!safeUrl) {
+      console.warn("Unsafe video URL blocked", video?.url);
+      setVideoTitle("Unable to load video");
+      setVideoUrl("");
+      setCurrentVideo({});
+      setVideoError("Cannot load video: unsupported or unsafe video URL received.");
+      return;
+    }
+
     setVideoTitle(`Now Playing: ${video.title}`);
-    setVideoPlayerHtml(`<iframe width="100%" height="100%" src="${video.url}" frameborder="0" allowfullscreen></iframe>`);
-    setCurrentVideo(video);
+    setVideoUrl(safeUrl);
+    setCurrentVideo({ ...video, url: safeUrl });
   };
 
   const checkAttention = async () => {
@@ -608,7 +652,8 @@ const App = () => {
             {activeTab === 'video' && (
               <VideoView
                 videoTitle={videoTitle}
-                videoPlayerHtml={videoPlayerHtml}
+                videoUrl={videoUrl}
+                videoError={videoError}
                 userSubject={userSubject}
                 loadVideoForSubject={loadVideoForSubject}
                 loading={loading}

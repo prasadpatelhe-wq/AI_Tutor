@@ -2,7 +2,8 @@ import React from 'react';
 
 const VideoView = ({
   videoTitle,
-  videoPlayerHtml,
+  videoUrl,
+  videoError,
   userSubject,
   loadVideoForSubject,
   loading,
@@ -24,7 +25,30 @@ const VideoView = ({
         </div>
       )}
       
-      <div className="video-container" dangerouslySetInnerHTML={{ __html: videoPlayerHtml }} />
+      <div className="video-container">
+        {videoUrl ? (
+          <iframe
+            width="100%"
+            height="100%"
+            src={videoUrl}
+            title={videoTitle || 'Learning video'}
+            frameBorder="0"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        ) : (
+          <div className="kid-card" style={{ textAlign: 'center' }}>
+            <p style={{ margin: 0 }}>Load a video to start watching.</p>
+          </div>
+        )}
+      </div>
+
+      {videoError && (
+        <div className="attention-alert" role="alert">
+          {videoError}
+        </div>
+      )}
       
       <div className="button-group" style={{ marginTop: '30px' }}>
         <button 
@@ -76,4 +100,3 @@ const VideoView = ({
 };
 
 export default VideoView;
-
