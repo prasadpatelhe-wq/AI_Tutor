@@ -1,22 +1,25 @@
-# backend/routes/subchapters_router.py
+"""
+Subchapters Router - Handles subchapter retrieval.
+Uses shared dependencies for database access.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from backend.database import SessionLocal
+
+# Use shared dependencies
+from backend.utils.dependencies import get_db
+
 from backend.models.subchapter import Subchapter
 
 router = APIRouter(prefix="/subchapters", tags=["Subchapters"])
 
 
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
 @router.get("/by_chapter/{chapter_id}")
 def get_subchapters_by_chapter(chapter_id: str, db: Session = Depends(get_db)):
+    """
+    Get all subchapters for a given chapter.
+    Returns empty list for chapters without subchapters (instead of 404).
+    """
     subs = (
         db.query(Subchapter)
         .filter(Subchapter.chapter_id == chapter_id)
@@ -24,9 +27,7 @@ def get_subchapters_by_chapter(chapter_id: str, db: Session = Depends(get_db)):
         .all()
     )
 
-    if not subs:
-        raise HTTPException(404, detail="No subchapters found for this chapter")
-
+    # Return empty list instead of 404 for valid chapters with no subchapters
     return [
         {
             "id": s.id,
@@ -42,9 +43,12 @@ def get_subchapters_by_chapter(chapter_id: str, db: Session = Depends(get_db)):
 
 @router.get("/{subchapter_id}")
 def get_subchapter_by_id(subchapter_id: str, db: Session = Depends(get_db)):
+    """Get subchapter by ID."""
     sub = db.query(Subchapter).filter(Subchapter.id == subchapter_id).first()
+
     if not sub:
-        raise HTTPException(404, detail=f"Subchapter with ID {subchapter_id} not found")
+        raise HTTPException(status_code=404, detail=f"Subchapter with ID {subchapter_id} not found")
+
     return {
         "id": sub.id,
         "title": sub.title,

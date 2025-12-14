@@ -1,143 +1,171 @@
 """
-API backend for the Agentic AI Tutor, replacing the Gradio UI.
+API backend for the Agentic AI Tutor.
 This exposes the core functionality via REST endpoints for a React frontend.
 """
-import sys, os
+
+import os
+import sys
+import logging
+import random
+from datetime import datetime
+from typing import Optional
 
 # === Fix Python path issues ===
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))           # backend/
-ROOT_DIR = os.path.dirname(BASE_DIR)                            # project root
-SRC_DIR = os.path.join(BASE_DIR, "src")                         # backend/src/
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ROOT_DIR = os.path.dirname(BASE_DIR)
+SRC_DIR = os.path.join(BASE_DIR, "src")
 
 for path in [ROOT_DIR, BASE_DIR, SRC_DIR]:
     if path not in sys.path:
         sys.path.append(path)
 
-from backend.database import SessionLocal, Base, engine
-from sqlalchemy import text
-from backend.services.flashcard_service import save_flashcards_from_quiz, get_flashcards
-
-# -----------------------------------------------------------
-# Flashcard Endpoints
-# -----------------------------------------------------------
-import backend.models  # noqa: F401  # Ensure all models are registered with Base
-
-from backend.services.progress_service import update_progress, get_due_flashcards
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.orm import Session
 
-from pydantic import BaseModel
-import random
-from datetime import datetime, timedelta
-from typing import Optional
-import hashlib
-import re
-import secrets
-from src.tutor.interface import tutor_interface as AI_TUTOR
-from src.tutor.interface import tutor_interface
-from backend.database import SessionLocal
+# Database and models
+from backend.database import SessionLocal, Base, engine
+import backend.models  # noqa: F401 - Ensure all models are registered
+
+# Shared dependencies and utilities
+from backend.utils.dependencies import get_db
+from backend.utils.security import (
+    normalize_phone,
+    compute_otp_hash,
+    verify_otp_hash,
+    generate_otp,
+    get_otp_expiry,
+    OTP_MAX_ATTEMPTS,
+)
+from backend.utils.auth import create_parent_token, verify_parent_token
+
+# Models
+from backend.models.students import Student
+from backend.models.otp_code import OtpCode
+from backend.models.scorecard import Scorecard
+from backend.models.student_game_state import StudentGameState
+
+# Schemas - Import from centralized location (no duplicates!)
+from backend.schemas import (
+    ParentPinRequest,
+    OtpRequest,
+    OtpVerifyRequest,
+    QuizRequest,
+    QuizScoreRequest,
+    PerkBuyRequest,
+    RoadmapRequest,
+    ChatRequest,
+    VideoRequest,
+)
+
+# Routers
 from backend.routes.flashcards_router import router as flashcards_router
-import sys, os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from backend.routes.subjects_router import router as subjects_router
 from backend.routes.chapters_router import router as chapters_router
 from backend.routes.meta_router import router as meta_router
 from backend.routes.students_router import router as students_router
 from backend.routes.subchapters_router import router as subchapters_router
-import logging
-import hmac
+
+# Services
+from backend.services.flashcard_service import save_flashcards_from_quiz
+
+logger = logging.getLogger(__name__)
+
+# === Environment Configuration ===
+PARENT_PIN = os.getenv("PARENT_PIN")
+PARENT_PHONE = os.getenv("PARENT_PHONE")
+OTP_ECHO = os.getenv("OTP_ECHO", "").strip().lower() in {"1", "true", "yes", "y"}
+
+if not PARENT_PIN:
+    logger.warning("PARENT_PIN not set; parent PIN verification will be disabled.")
+if not PARENT_PHONE:
+    logger.warning("PARENT_PHONE not set; parent OTP endpoint will be disabled.")
+
 
 # === Database Schema Migration ===
 def run_migrations():
     """
     Lightweight, idempotent migration helper.
-    - For SQLite: keep previous behavior using PRAGMA checks.
-    - For MySQL/MariaDB: use information_schema to add missing columns on students.
+    Supports SQLite and MySQL/MariaDB.
     """
     try:
         dialect = engine.url.get_backend_name()
 
         if dialect == "sqlite":
-            db_path = engine.url.database
-            if db_path and not os.path.isabs(db_path):
-                db_path = os.path.abspath(os.path.join(os.getcwd(), db_path))
-
             conn = engine.raw_connection()
             try:
                 cursor = conn.cursor()
 
-                # Ensure students table exists (create all tables if missing)
+                # Check if tables exist
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='students'")
                 has_students = cursor.fetchone() is not None
                 if not has_students:
-                    print(f"Creating database tables (students table missing)... [db={db_path or ':memory:'}]")
+                    print("Creating database tables...")
                     Base.metadata.create_all(bind=engine)
                     return
-                
-                # Check if columns exist in students table
+
+                # Students table migrations
                 cursor.execute("PRAGMA table_info(students)")
                 columns = [info[1] for info in cursor.fetchall()]
 
-                if "name" not in columns:
-                    print("Migrating: Adding name column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN name TEXT")
-                    if "full_name" in columns:
-                        cursor.execute("UPDATE students SET name = full_name WHERE full_name IS NOT NULL")
-                
-                if "is_active" not in columns:
-                    print("Migrating: Adding is_active column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN is_active INTEGER DEFAULT 1")
-                    
-                if "password" not in columns:
-                    print("Migrating: Adding password column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN password TEXT")
+                migrations = [
+                    ("name", "ALTER TABLE students ADD COLUMN name TEXT"),
+                    ("is_active", "ALTER TABLE students ADD COLUMN is_active INTEGER DEFAULT 1"),
+                    ("password", "ALTER TABLE students ADD COLUMN password TEXT"),
+                    ("board", "ALTER TABLE students ADD COLUMN board TEXT"),
+                    ("grade_band", "ALTER TABLE students ADD COLUMN grade_band TEXT"),
+                    ("medium", "ALTER TABLE students ADD COLUMN medium TEXT"),
+                    ("phone", "ALTER TABLE students ADD COLUMN phone TEXT"),
+                    ("auth_provider", "ALTER TABLE students ADD COLUMN auth_provider TEXT"),
+                    ("goal", "ALTER TABLE students ADD COLUMN goal TEXT"),
+                    ("preferred_subject_ids", "ALTER TABLE students ADD COLUMN preferred_subject_ids TEXT"),
+                    ("board_id", "ALTER TABLE students ADD COLUMN board_id TEXT"),
+                    ("grade_id", "ALTER TABLE students ADD COLUMN grade_id TEXT"),
+                    ("language_id", "ALTER TABLE students ADD COLUMN language_id TEXT"),
+                ]
 
-                if "board" not in columns:
-                    print("Migrating: Adding board column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN board TEXT")
+                for col_name, sql in migrations:
+                    if col_name not in columns:
+                        print(f"Migrating: Adding {col_name} column to students table...")
+                        cursor.execute(sql)
 
-                if "grade_band" not in columns:
-                    print("Migrating: Adding grade_band column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN grade_band TEXT")
+                # Handle name migration from full_name
+                if "name" not in columns and "full_name" in columns:
+                    cursor.execute("UPDATE students SET name = full_name WHERE full_name IS NOT NULL")
 
-                if "medium" not in columns:
-                    print("Migrating: Adding medium column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN medium TEXT")
-
-                if "phone" not in columns:
-                    print("Migrating: Adding phone column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN phone TEXT")
-
-                if "auth_provider" not in columns:
-                    print("Migrating: Adding auth_provider column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN auth_provider TEXT")
-
-                if "goal" not in columns:
-                    print("Migrating: Adding goal column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN goal TEXT")
-
-                if "preferred_subject_ids" not in columns:
-                    print("Migrating: Adding preferred_subject_ids column to students table...")
-                    cursor.execute("ALTER TABLE students ADD COLUMN preferred_subject_ids TEXT")
-
-                # Flashcard subchapter support
+                # Flashcard table migrations
                 cursor.execute("PRAGMA table_info(flashcard)")
                 flash_cols = [info[1] for info in cursor.fetchall()]
                 if "subchapter_id" not in flash_cols:
                     print("Migrating: Adding subchapter_id to flashcard table...")
                     cursor.execute("ALTER TABLE flashcard ADD COLUMN subchapter_id TEXT")
-                    
+
+                # Quiz table migrations
+                cursor.execute("PRAGMA table_info(quiz)")
+                quiz_cols = [info[1] for info in cursor.fetchall()]
+                if "created_at" not in quiz_cols:
+                    print("Migrating: Adding created_at to quiz table...")
+                    cursor.execute("ALTER TABLE quiz ADD COLUMN created_at DATETIME")
+
+                # Scorecard table migrations
+                cursor.execute("PRAGMA table_info(scorecard)")
+                score_cols = [info[1] for info in cursor.fetchall()]
+                if "quiz_id" not in score_cols:
+                    print("Migrating: Adding quiz_id to scorecard table...")
+                    cursor.execute("ALTER TABLE scorecard ADD COLUMN quiz_id TEXT")
+
                 conn.commit()
             finally:
                 conn.close()
 
-            # Ensure any newly-added tables are created (safe: create missing only).
+            # Create any new tables
             Base.metadata.create_all(bind=engine)
-
             print("Database schema check completed.")
             return
 
-        # MySQL / MariaDB path
+        # MySQL/MariaDB path
         if dialect in ["mysql", "mariadb"]:
             with engine.begin() as conn:
                 table_exists = conn.execute(
@@ -147,288 +175,208 @@ def run_migrations():
                     )
                 ).scalar()
                 if not table_exists:
-                    print("Creating database tables (students table missing)...")
+                    print("Creating database tables...")
                     Base.metadata.create_all(bind=engine)
                     return
 
-                cols = {
-                    row[0]
-                    for row in conn.execute(
-                        text(
-                            "SELECT column_name FROM information_schema.columns "
-                            "WHERE table_schema = DATABASE() AND table_name = 'students'"
-                        )
-                    )
-                }
-
-                if "name" not in cols:
-                    if "full_name" in cols:
-                        print("Migrating: Renaming full_name -> name on students...")
-                        conn.execute(text("ALTER TABLE students CHANGE full_name name VARCHAR(100)"))
-                    else:
-                        print("Migrating: Adding name column to students...")
-                        conn.execute(text("ALTER TABLE students ADD COLUMN name VARCHAR(100) NOT NULL"))
-
-                if "password" not in cols:
-                    print("Migrating: Adding password column to students...")
-                    conn.execute(text("ALTER TABLE students ADD COLUMN password VARCHAR(200)"))
-
-                if "grade_band" not in cols:
-                    print("Migrating: Adding grade_band column to students...")
-                    conn.execute(text("ALTER TABLE students ADD COLUMN grade_band VARCHAR(20)"))
-
-                if "board" not in cols:
-                    print("Migrating: Adding board column to students...")
-                    conn.execute(text("ALTER TABLE students ADD COLUMN board VARCHAR(50)"))
-
-                if "is_active" not in cols:
-                    print("Migrating: Adding is_active column to students...")
-                    conn.execute(text("ALTER TABLE students ADD COLUMN is_active TINYINT(1) DEFAULT 1"))
-
-                if "medium" not in cols:
-                    print("Migrating: Adding medium column to students...")
-                    conn.execute(text("ALTER TABLE students ADD COLUMN medium VARCHAR(50) NULL"))
-
-                if "phone" not in cols:
-                    print("Migrating: Adding phone column to students...")
-                    conn.execute(text("ALTER TABLE students ADD COLUMN phone VARCHAR(20) NULL"))
-
-                if "auth_provider" not in cols:
-                    print("Migrating: Adding auth_provider column to students...")
-                    conn.execute(text("ALTER TABLE students ADD COLUMN auth_provider VARCHAR(20) NULL"))
-
-                if "goal" not in cols:
-                    print("Migrating: Adding goal column to students...")
-                    conn.execute(text("ALTER TABLE students ADD COLUMN goal VARCHAR(50) NULL"))
-
-                if "preferred_subject_ids" not in cols:
-                    print("Migrating: Adding preferred_subject_ids column to students...")
-                    conn.execute(text("ALTER TABLE students ADD COLUMN preferred_subject_ids TEXT NULL"))
-
-                # Flashcard subchapter support
-                flash_cols = {
-                    row[0]
-                    for row in conn.execute(
-                        text(
-                            "SELECT column_name FROM information_schema.columns "
-                            "WHERE table_schema = DATABASE() AND table_name = 'flashcard'"
-                        )
-                    )
-                }
-                if "subchapter_id" not in flash_cols:
-                    print("Migrating: Adding subchapter_id to flashcard table...")
-                    conn.execute(text("ALTER TABLE flashcard ADD COLUMN subchapter_id VARCHAR(36) NULL"))
-
-            # Ensure any newly-added tables are created (safe: create missing only).
             Base.metadata.create_all(bind=engine)
-
             print("Database schema check completed.")
             return
 
-        # Fallback: just ensure tables exist
-        print(f"Skipping migrations for unsupported dialect '{dialect}', running create_all() as a fallback...")
+        # Fallback
+        print(f"Skipping migrations for dialect '{dialect}', running create_all()...")
         Base.metadata.create_all(bind=engine)
 
     except Exception as e:
         print(f"Migration warning: {e}")
 
+
+# Run migrations on startup
 run_migrations()
 
-logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-PARENT_PIN = os.getenv("PARENT_PIN")
-if not PARENT_PIN:
-    logger.warning("PARENT_PIN not set; parent verification endpoint will be disabled.")
+# === FastAPI App ===
+app = FastAPI(
+    title="Euri AI Tutor API",
+    version="2.0",
+    description="AI-powered educational platform for students"
+)
 
-PARENT_PHONE = os.getenv("PARENT_PHONE")
-if not PARENT_PHONE:
-    logger.warning("PARENT_PHONE not set; parent OTP endpoint will be disabled.")
-
-OTP_SECRET = os.getenv("OTP_SECRET", "dev-insecure-otp-secret")
-OTP_TTL_MINUTES = int(os.getenv("OTP_TTL_MINUTES", "10"))
-OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
-OTP_ECHO = os.getenv("OTP_ECHO", "").strip().lower() in {"1", "true", "yes", "y"}
-app = FastAPI(title="Euri AI Tutor API", version="2.0")
-
-# Game state management
-class GameState:
-    def __init__(self):
-        self.coins = 100  # Starting coins
-        self.total_coins_earned = 100
-        self.coin_board = []
-        self.streak_days = 0
-        self.quizzes_completed = 0
-        self.videos_watched = 0
-        self.current_level = 1
-        self.unlocked_perks = []
-        self.daily_progress = {"videos": 0, "quizzes": 0, "study_time": 0}
-        self.attention_score = 100
-        self.parent_authenticated = False
-
-    def add_coins(self, amount, source="General"):
-        if amount <= 0:
-            return
-        self.coins += amount
-        self.total_coins_earned += amount
-        self.coin_board.append(
-            {
-                "timestamp": datetime.utcnow().isoformat(),
-                "source": source,
-                "amount": amount,
-                "total": self.total_coins_earned,
-            }
-        )
-
-    def spend_coins(self, amount):
-        if self.coins >= amount:
-            self.coins -= amount
-            return True
-        return False
-
-# Global game state
-game_state = GameState()
-
-# AI Tutor Initialization
-try:
-    tutor_ready = tutor_interface.retriever is not None
-    print(f"🤖 AI Tutor System: {'✅ Ready' if tutor_ready else '❌ Not Ready'}")
-except Exception as e:
-    print(f"AI Tutor Initialization Error: {e}")
-    tutor_ready = False
-
-# Sample video content
-SAMPLE_VIDEOS = {
-    "Math": [
-        {"title": "Fun with Fractions! 🥧", "duration": "15:30", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
-        {"title": "Multiplication Magic ✨", "duration": "12:45", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
-        {"title": "Geometry Adventures 📐", "duration": "18:20", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"}
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001"
     ],
-    "Science": [
-        {"title": "Amazing Animals 🦁", "duration": "16:15", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
-        {"title": "Space Exploration 🚀", "duration": "14:30", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
-        {"title": "Plant Life Cycle 🌱", "duration": "13:45", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"}
-    ],
-    "Social Studies": [
-        {"title": "Indian History Heroes 🇮🇳", "duration": "17:00", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
-        {"title": "Geography Fun 🗺️", "duration": "15:20", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
-        {"title": "Culture & Traditions 🎭", "duration": "16:40", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"}
-    ],
-    "English": [
-        {"title": "Story Time Adventures 📚", "duration": "14:15", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
-        {"title": "Grammar Made Easy 📝", "duration": "12:30", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
-        {"title": "Poetry Corner 🎵", "duration": "11:45", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"}
-    ]
-}
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-PERKS_SHOP = [
-    {"name": "Golden Star Badge ⭐", "cost": 50, "description": "Show everyone you're a star student!"},
-    {"name": "Super Learner Avatar 🦸", "cost": 100, "description": "Unlock a cool superhero avatar!"},
-    {"name": "Speed Boost ⚡", "cost": 75, "description": "Get extra time for quizzes!"},
-    {"name": "Hint Helper 💡", "cost": 30, "description": "Get one free hint per quiz!"},
-    {"name": "Rainbow Theme 🌈", "cost": 80, "description": "Make your app colorful!"},
-    {"name": "Music Mode 🎵", "cost": 60, "description": "Study with background music!"}
-]
-
-# Pydantic models for requests
-class ParentPinRequest(BaseModel):
-    pin: str
-
-class ParentOtpRequest(BaseModel):
-    phone: str
-
-class ParentOtpVerifyRequest(BaseModel):
-    phone: str
-    otp: str
-
-class VideoRequest(BaseModel):
-    subject: str
-
-class QuizRequest(BaseModel):
-    subject: str
-    grade_band: str
-    chapter_id: str
-    chapter_title: str
-    chapter_summary: str
-    subchapter_id: Optional[str] = None
-    subchapter_title: Optional[str] = None
-    subchapter_summary: Optional[str] = None
-    num_questions: int = 5
-    difficulty: str = "basic"
-
-class FlashcardFetchRequest(BaseModel):
-    subject: str
-    chapter: str
-
-from typing import Optional
-
-class QuizScoreRequest(BaseModel):
-    answers: list[int]
-    correct_answers: list[int]
-    difficulty: str = "basic"
-    chapter_id: Optional[str] = None
-    subject_id: Optional[str] = None
-    student_id: Optional[str] = None
-
-class PerkBuyRequest(BaseModel):
-    perk_index: int
-
-class RoadmapRequest(BaseModel):
-    grade: str
-    board: str
-    subject: str
-
-class ChatRequest(BaseModel):
-    message: str
-    subject: str
-    grade: str
-
-class ProgressRequest(BaseModel):
-    student_id: str
-    flashcard_id: str
-    correct: bool
-
-# FastAPI app
+# Include routers
 app.include_router(flashcards_router)
 app.include_router(chapters_router)
 app.include_router(subjects_router)
 app.include_router(meta_router)
 app.include_router(students_router)
 app.include_router(subchapters_router)
-# CORS middleware for React frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:3001", "http://127.0.0.1:3001"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
+# === AI Tutor Initialization ===
+def get_tutor_interface():
+    """Lazy load AI Tutor to avoid import issues."""
+    from src.tutor.interface import tutor_interface
+    return tutor_interface
 
 
+try:
+    tutor = get_tutor_interface()
+    tutor_ready = tutor.retriever is not None
+    print(f"AI Tutor System: {'Ready' if tutor_ready else 'Not Ready'}")
+except Exception as e:
+    print(f"AI Tutor Initialization Error: {e}")
+    tutor_ready = False
+
+
+# === Static Content ===
+SAMPLE_VIDEOS = {
+    "Math": [
+        {"title": "Fun with Fractions!", "duration": "15:30", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
+        {"title": "Multiplication Magic", "duration": "12:45", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
+    ],
+    "Science": [
+        {"title": "Amazing Animals", "duration": "16:15", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
+        {"title": "Space Exploration", "duration": "14:30", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
+    ],
+    "Social Studies": [
+        {"title": "Indian History Heroes", "duration": "17:00", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
+    ],
+    "English": [
+        {"title": "Story Time Adventures", "duration": "14:15", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"},
+    ]
+}
+
+PERKS_SHOP = [
+    {"id": "golden_star", "name": "Golden Star Badge", "cost": 50, "description": "Show everyone you're a star student!"},
+    {"id": "super_learner", "name": "Super Learner Avatar", "cost": 100, "description": "Unlock a cool superhero avatar!"},
+    {"id": "speed_boost", "name": "Speed Boost", "cost": 75, "description": "Get extra time for quizzes!"},
+    {"id": "hint_helper", "name": "Hint Helper", "cost": 30, "description": "Get one free hint per quiz!"},
+    {"id": "rainbow_theme", "name": "Rainbow Theme", "cost": 80, "description": "Make your app colorful!"},
+    {"id": "music_mode", "name": "Music Mode", "cost": 60, "description": "Study with background music!"},
+]
+
+
+# === Helper Functions ===
+def get_or_create_game_state(db: Session, student_id: str) -> StudentGameState:
+    """Get or create game state for a student."""
+    game_state = db.query(StudentGameState).filter(
+        StudentGameState.student_id == student_id
+    ).first()
+
+    if not game_state:
+        game_state = StudentGameState(student_id=student_id)
+        db.add(game_state)
+        db.commit()
+        db.refresh(game_state)
+
+    return game_state
+
+
+# === Health Check ===
 @app.get("/health")
 def health_check():
-    return {"status": "ok", "tutor_ready": tutor_ready}
-
-def _normalize_phone(phone: str) -> str:
-    raw = (phone or "").strip()
-    digits = re.sub(r"\D", "", raw)
-    if not digits:
-        raise HTTPException(status_code=400, detail="Invalid phone number")
-    if len(digits) == 10:
-        return f"+91{digits}"
-    return f"+{digits}"
+    """Health check endpoint."""
+    return {
+        "status": "ok",
+        "tutor_ready": tutor_ready,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
-def _compute_otp_hash(code: str, identifier: str, purpose: str) -> str:
-    msg = f"{purpose}:{identifier}:{code}".encode()
-    return hmac.new(OTP_SECRET.encode(), msg, hashlib.sha256).hexdigest()
+# === Parent Authentication ===
+from pydantic import BaseModel
 
 
-def _verify_and_consume_parent_otp(db, phone: str, otp: str) -> None:
-    from backend.models.otp_code import OtpCode
+class ParentOtpRequest(BaseModel):
+    phone: str
 
+
+class ParentOtpVerifyRequest(BaseModel):
+    phone: str
+    otp: str
+
+
+@app.post("/verify_parent")
+def api_verify_parent(req: ParentPinRequest, db: Session = Depends(get_db)):
+    """Verify parent with PIN and return JWT token."""
+    if not PARENT_PIN:
+        raise HTTPException(status_code=503, detail="Parent verification not configured.")
+
+    import hmac
+    if hmac.compare_digest(req.pin, PARENT_PIN):
+        # For PIN auth, we need a student_id - get first student or use a placeholder
+        student = db.query(Student).first()
+        student_id = student.id if student else "parent-session"
+
+        token = create_parent_token(student_id)
+        return {
+            "success": True,
+            "message": "Parent access granted!",
+            "access_token": token,
+            "token_type": "bearer"
+        }
+
+    raise HTTPException(status_code=401, detail="Invalid PIN")
+
+
+@app.post("/parent/request_otp")
+def api_parent_request_otp(req: ParentOtpRequest, db: Session = Depends(get_db)):
+    """Request OTP for parent authentication."""
+    if not PARENT_PHONE:
+        raise HTTPException(status_code=503, detail="Parent OTP not configured.")
+
+    phone = normalize_phone(req.phone)
+    allowed = normalize_phone(PARENT_PHONE)
+
+    if phone != allowed:
+        raise HTTPException(status_code=403, detail="This phone number is not authorized for parent access.")
+
+    code = generate_otp()
+    record = OtpCode(
+        channel="phone",
+        identifier=phone,
+        purpose="parent",
+        otp_hash=compute_otp_hash(phone, code, "parent"),
+        expires_at=get_otp_expiry(),
+        attempts=0,
+    )
+    db.add(record)
+    db.commit()
+
+    print(f"[OTP] purpose=parent channel=phone identifier={phone} otp={code}")
+
+    response = {"success": True, "message": "OTP sent"}
+    if OTP_ECHO:
+        response["dev_otp"] = code
+    return response
+
+
+@app.post("/parent/verify_otp")
+def api_parent_verify_otp(req: ParentOtpVerifyRequest, db: Session = Depends(get_db)):
+    """Verify parent OTP and return JWT token."""
+    if not PARENT_PHONE:
+        raise HTTPException(status_code=503, detail="Parent OTP not configured.")
+
+    phone = normalize_phone(req.phone)
+    allowed = normalize_phone(PARENT_PHONE)
+
+    if phone != allowed:
+        raise HTTPException(status_code=403, detail="This phone number is not authorized for parent access.")
+
+    # Verify OTP
     otp_row = (
         db.query(OtpCode)
         .filter(
@@ -443,154 +391,119 @@ def _verify_and_consume_parent_otp(db, phone: str, otp: str) -> None:
     )
 
     if not otp_row:
-        raise HTTPException(status_code=400, detail="OTP expired or not requested. Please request a new OTP.")
+        raise HTTPException(status_code=400, detail="OTP expired or not requested.")
 
     if (otp_row.attempts or 0) >= OTP_MAX_ATTEMPTS:
-        raise HTTPException(status_code=429, detail="Too many wrong attempts. Please request a new OTP.")
+        raise HTTPException(status_code=429, detail="Too many wrong attempts.")
 
-    expected = _compute_otp_hash((otp or "").strip(), phone, "parent")
-    if not hmac.compare_digest(expected, otp_row.otp_hash):
+    if not verify_otp_hash(phone, req.otp.strip(), "parent", otp_row.otp_hash):
         otp_row.attempts = (otp_row.attempts or 0) + 1
         db.commit()
-        raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+        raise HTTPException(status_code=400, detail="Invalid OTP.")
 
     otp_row.consumed_at = datetime.utcnow()
     db.commit()
 
+    # Get student for token
+    student = db.query(Student).first()
+    student_id = student.id if student else "parent-session"
 
-@app.post("/verify_parent")
-def api_verify_parent(req: ParentPinRequest):
-    if not PARENT_PIN:
-        raise HTTPException(status_code=503, detail="Parent verification not configured.")
+    token = create_parent_token(student_id)
+    return {
+        "success": True,
+        "message": "Parent access granted!",
+        "access_token": token,
+        "token_type": "bearer"
+    }
 
-    if hmac.compare_digest(req.pin, PARENT_PIN):
-        game_state.parent_authenticated = True
-        return {"success": True, "message": "✅ Parent access granted!"}
-    return {"success": False, "message": "❌ Wrong PIN. Try again!"}
-
-@app.post("/parent/request_otp")
-def api_parent_request_otp(req: ParentOtpRequest):
-    if not PARENT_PHONE:
-        raise HTTPException(status_code=503, detail="Parent OTP not configured.")
-
-    phone = _normalize_phone(req.phone)
-    allowed = _normalize_phone(PARENT_PHONE)
-    if phone != allowed:
-        raise HTTPException(status_code=403, detail="This phone number is not authorized for parent access.")
-
-    db = SessionLocal()
-    try:
-        from backend.models.otp_code import OtpCode
-
-        code = f"{secrets.randbelow(1_000_000):06d}"
-        record = OtpCode(
-            channel="phone",
-            identifier=phone,
-            purpose="parent",
-            otp_hash=_compute_otp_hash(code, phone, "parent"),
-            expires_at=datetime.utcnow() + timedelta(minutes=OTP_TTL_MINUTES),
-            attempts=0,
-        )
-        db.add(record)
-        db.commit()
-
-        print(f"[OTP] purpose=parent channel=phone identifier={phone} otp={code}")
-        response = {"success": True, "message": "OTP sent"}
-        if OTP_ECHO:
-            response["dev_otp"] = code
-        return response
-    finally:
-        db.close()
-
-
-@app.post("/parent/verify_otp")
-def api_parent_verify_otp(req: ParentOtpVerifyRequest):
-    if not PARENT_PHONE:
-        raise HTTPException(status_code=503, detail="Parent OTP not configured.")
-
-    phone = _normalize_phone(req.phone)
-    allowed = _normalize_phone(PARENT_PHONE)
-    if phone != allowed:
-        raise HTTPException(status_code=403, detail="This phone number is not authorized for parent access.")
-
-    db = SessionLocal()
-    try:
-        _verify_and_consume_parent_otp(db, phone=phone, otp=req.otp)
-        game_state.parent_authenticated = True
-        return {"success": True, "message": "✅ Parent access granted!"}
-    finally:
-        db.close()
 
 @app.post("/logout_parent")
 def api_logout_parent():
-    game_state.parent_authenticated = False
-    return {"message": "👋 Parent logged out!"}
+    """Logout parent (client should discard token)."""
+    return {"message": "Parent logged out. Please discard your token."}
 
+
+# === Video Endpoints ===
 @app.get("/get_video_for_subject")
 def api_get_video_for_subject(subject: str):
+    """Get a random video for the given subject."""
     if subject in SAMPLE_VIDEOS:
-        video = random.choice(SAMPLE_VIDEOS[subject])
-        return video
-    return {"title": "Sample Video 📺", "duration": "15:00", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"}
+        return random.choice(SAMPLE_VIDEOS[subject])
+    return {"title": "Sample Video", "duration": "15:00", "url": "https://www.youtube.com/embed/dQw4w9WgXcQ"}
+
 
 @app.get("/simulate_attention_check")
 def api_simulate_attention_check():
+    """Simulate attention check (for demo purposes)."""
     attention_level = random.randint(60, 100)
-    game_state.attention_score = attention_level
 
     if attention_level < 80:
         questions = [
-            "Hey there! 👋 What was the last thing you learned?",
-            "Quick check! 🧠 Can you tell me one interesting fact from the video?",
-            "Stay focused! 💪 What do you think happens next?",
-            "Attention buddy! 👀 What's your favorite part so far?"
+            "Hey there! What was the last thing you learned?",
+            "Quick check! Can you tell me one interesting fact from the video?",
+            "Stay focused! What do you think happens next?",
         ]
         return {
             "needs_check": True,
             "socratic_question": random.choice(questions),
             "attention_level": attention_level
         }
+
     return {
         "needs_check": False,
         "socratic_question": None,
         "attention_level": attention_level
     }
 
+
 @app.post("/complete_video_watching")
-def api_complete_video_watching(req: VideoRequest):
+def api_complete_video_watching(
+    req: VideoRequest,
+    student_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Record video completion and award coins."""
     coins_earned = 20
-    game_state.add_coins(coins_earned, source=f"Video: {req.subject}")
-    game_state.videos_watched += 1
-    game_state.daily_progress["videos"] += 1
-    return {"message": f"🎉 Great job! You earned {coins_earned} coins for watching the video! 🎉", "coins_earned": coins_earned, "coins": game_state.coins}
+
+    if student_id:
+        game_state = get_or_create_game_state(db, student_id)
+        game_state.add_coins(coins_earned)
+        game_state.total_videos_watched += 1
+        game_state.increment_daily_stat("videos_watched")
+        game_state.update_streak()
+        db.commit()
+
+    return {
+        "message": f"Great job! You earned {coins_earned} coins for watching the video!",
+        "coins_earned": coins_earned
+    }
 
 
-from backend.database import SessionLocal
-from backend.services.flashcard_service import save_flashcards_from_quiz
-
+# === Quiz Endpoints ===
 @app.post("/generate_quiz")
-def generate_quiz(request: QuizRequest, student_id: str = None):
-    """
-    Generates quizzes for basic, medium, and hard difficulty levels.
-    Automatically saves flashcards (question + explanation) into the database.
-    """
-    db = SessionLocal()
+def generate_quiz(
+    request: QuizRequest,
+    student_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Generate quizzes for all difficulty levels and save flashcards."""
     try:
-        # ✅ Step 1: If student_id provided, validate or override grade_band
-        if student_id:
-            from backend.models.students import Student
-            student = db.query(Student).filter(Student.id == student_id).first()
+        tutor = get_tutor_interface()
+
+        # Validate student if provided
+        effective_student_id = student_id or request.student_id
+        if effective_student_id:
+            student = db.query(Student).filter(Student.id == effective_student_id).first()
             if not student:
                 raise HTTPException(status_code=404, detail="Student not found")
 
-            # ⚠️ Check for grade mismatch
-            if student.grade_band != request.grade_band:
-                print(f"⚠️ Grade mismatch for student {student_id}: "
-                      f"Request grade='{request.grade_band}', DB grade='{student.grade_band}'. Using DB grade.")
-                request.grade_band = student.grade_band  # Correct to student's actual grade
+            # Use student's grade if different from request
+            if student.grade_band and student.grade_band != request.grade_band:
+                logger.info(f"Using student's grade {student.grade_band} instead of {request.grade_band}")
+                request.grade_band = student.grade_band
 
-        # ✅ Step 2: Generate quiz using AI_TUTOR
-        result = AI_TUTOR.generate_all_quizzes(
+        # Generate quiz
+        result = tutor.generate_all_quizzes(
             subject=request.subject,
             grade_band=request.grade_band,
             chapter_id=request.subchapter_id or request.chapter_id,
@@ -598,194 +511,252 @@ def generate_quiz(request: QuizRequest, student_id: str = None):
             chapter_summary=request.subchapter_summary or request.chapter_summary,
         )
 
-        # ✅ Step 3: Auto-save flashcards for each difficulty level
+        # Save flashcards for each difficulty level
         for difficulty_level, quizzes in result.items():
             for quiz in quizzes:
-                save_flashcards_from_quiz(
-                    quiz_data=quiz,
-                    subject_name=request.subject,
-                    chapter_title=request.subchapter_title or request.chapter_title,
-                    chapter_summary=request.subchapter_summary or request.chapter_summary,
-                    db=db,
-                    student_id=student_id,  # store which student generated it
-                    chapter_id=request.chapter_id,  # parent chapter
-                    subchapter_id=request.subchapter_id,
-                )
+                try:
+                    save_flashcards_from_quiz(
+                        quiz_data=quiz,
+                        subject_name=request.subject,
+                        chapter_title=request.subchapter_title or request.chapter_title,
+                        chapter_summary=request.subchapter_summary or request.chapter_summary,
+                        db=db,
+                        student_id=effective_student_id,
+                        chapter_id=request.chapter_id,
+                        subchapter_id=request.subchapter_id,
+                    )
+                except Exception as e:
+                    logger.warning(f"Failed to save flashcards: {e}")
 
-        # ✅ Step 4: Return quiz data (for frontend)
         return result
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Quiz generation error: {e}")
         raise HTTPException(status_code=500, detail=f"Error generating quiz: {e}")
 
-    finally:
-        db.close()
 
 @app.post("/calculate_quiz_score")
-def api_calculate_quiz_score(req: QuizScoreRequest):
+def api_calculate_quiz_score(
+    req: QuizScoreRequest,
+    db: Session = Depends(get_db)
+):
+    """Calculate quiz score, save to database, and award coins."""
     correct = sum(1 for a, c in zip(req.answers, req.correct_answers) if a == c)
     total = len(req.correct_answers)
     percentage = (correct / total) * 100 if total > 0 else 0
-
-    # Save to Scorecard
-    db = SessionLocal()
-    try:
-        from backend.models.scorecard import Scorecard
-        new_score = Scorecard(
-            student_id=req.student_id, # Can be None
-            subject_id=req.subject_id,
-            chapter_id=req.chapter_id,
-            score=correct,
-            total_questions=total,
-            difficulty=req.difficulty,
-            timestamp=datetime.utcnow()
-        )
-        db.add(new_score)
-        db.commit()
-    except Exception as e:
-        print(f"Error saving score: {e}")
-    finally:
-        db.close()
-
     coins = correct * 10
 
+    # Save scorecard
+    try:
+        if req.student_id and req.subject_id and req.chapter_id:
+            new_score = Scorecard(
+                student_id=req.student_id,
+                subject_id=req.subject_id,
+                chapter_id=req.chapter_id,
+                quiz_id=req.quiz_id,
+                score=correct,
+                total_questions=total,
+                difficulty=req.difficulty,
+            )
+            db.add(new_score)
+
+            # Update game state
+            if req.student_id:
+                game_state = get_or_create_game_state(db, req.student_id)
+                game_state.add_coins(coins)
+                game_state.total_quizzes_completed += 1
+                game_state.increment_daily_stat("quizzes_completed")
+                game_state.update_streak()
+
+            db.commit()
+    except Exception as e:
+        logger.error(f"Error saving score: {e}")
+        db.rollback()
+
+    # Generate message
     if correct == total and total > 0:
-        emoji = "🌟"
         message = "Perfect score! You mastered every question!"
     elif correct > 0:
-        emoji = "🎯"
         message = f"Great job! You answered {correct} question{'s' if correct != 1 else ''} correctly."
     else:
-        emoji = "💪"
         message = "Keep practicing! You'll get better with each try!"
 
-    game_state.add_coins(coins, source="Quiz Correct Answers")
-    game_state.quizzes_completed += 1
-    game_state.daily_progress["quizzes"] += 1
-
     return {
-        "score": f"{correct}/{total}",
+        "score": correct,
+        "total": total,
         "percentage": percentage,
         "coins_earned": coins,
-        "emoji": emoji,
         "message": message
     }
 
-@app.get("/student_score/{student_id}")
-def api_get_student_score(student_id: str):
-    db = SessionLocal()
-    try:
-        from backend.models.scorecard import Scorecard
-        from sqlalchemy import func
-        
-        # Calculate total score (sum of 'score' column)
-        total_score = db.query(func.sum(Scorecard.score)).filter(Scorecard.student_id == student_id).scalar() or 0
-        
-        return {"student_id": student_id, "total_score": total_score}
-    except Exception as e:
-        logger.error(f"Error fetching student score: {e}")
-        raise HTTPException(status_code=500, detail="Error fetching score")
-    finally:
-        db.close()
 
+@app.get("/student_score/{student_id}")
+def api_get_student_score(student_id: str, db: Session = Depends(get_db)):
+    """Get total score for a student."""
+    from sqlalchemy import func
+
+    total_score = db.query(func.sum(Scorecard.score)).filter(
+        Scorecard.student_id == student_id
+    ).scalar() or 0
+
+    return {"student_id": student_id, "total_score": total_score}
+
+
+# === Gamification Endpoints ===
 @app.get("/coin_display")
-def api_get_coin_display():
-    return {"display": f"🪙 {game_state.coins} Coins", "coins": game_state.coins}
+def api_get_coin_display(student_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get coin display for a student."""
+    if student_id:
+        game_state = get_or_create_game_state(db, student_id)
+        return {"display": f"{game_state.coins} Coins", "coins": game_state.coins}
+
+    return {"display": "0 Coins", "coins": 0}
+
+
+@app.get("/game_state/{student_id}")
+def api_get_game_state(student_id: str, db: Session = Depends(get_db)):
+    """Get full game state for a student."""
+    game_state = get_or_create_game_state(db, student_id)
+
+    return {
+        "coins": game_state.coins,
+        "total_coins_earned": game_state.total_coins_earned,
+        "current_streak": game_state.current_streak,
+        "longest_streak": game_state.longest_streak,
+        "daily_progress": game_state.get_daily_progress(),
+        "purchased_perks": game_state.get_purchased_perks(),
+        "total_quizzes_completed": game_state.total_quizzes_completed,
+        "total_flashcards_reviewed": game_state.total_flashcards_reviewed,
+        "total_videos_watched": game_state.total_videos_watched,
+    }
+
 
 @app.post("/buy_perk")
-def api_buy_perk(req: PerkBuyRequest):
-    if 0 <= req.perk_index < len(PERKS_SHOP):
-        perk = PERKS_SHOP[req.perk_index]
-        if game_state.spend_coins(perk["cost"]):
-            game_state.unlocked_perks.append(perk["name"])
-            return {"message": f"🎉 You bought {perk['name']}! Enjoy your new perk!", "success": True}
-        else:
-            return {"message": f"❌ Not enough coins! You need {perk['cost']} coins but only have {game_state.coins}.", "success": False}
-    return {"message": "❌ Invalid perk selection.", "success": False}
+def api_buy_perk(req: PerkBuyRequest, db: Session = Depends(get_db)):
+    """Buy a perk with coins."""
+    if not req.student_id:
+        raise HTTPException(status_code=400, detail="student_id is required")
+
+    if not (0 <= req.perk_index < len(PERKS_SHOP)):
+        raise HTTPException(status_code=400, detail="Invalid perk selection")
+
+    perk = PERKS_SHOP[req.perk_index]
+    game_state = get_or_create_game_state(db, req.student_id)
+
+    # Check if already owned
+    if perk["id"] in game_state.get_purchased_perks():
+        return {"message": f"You already own {perk['name']}!", "success": False}
+
+    if game_state.spend_coins(perk["cost"]):
+        game_state.add_perk(perk["id"])
+        db.commit()
+        return {
+            "message": f"You bought {perk['name']}! Enjoy your new perk!",
+            "success": True,
+            "remaining_coins": game_state.coins
+        }
+
+    return {
+        "message": f"Not enough coins! You need {perk['cost']} coins but only have {game_state.coins}.",
+        "success": False
+    }
+
+
+@app.get("/perks_shop")
+def api_get_perks_shop():
+    """Get available perks."""
+    return {"perks": PERKS_SHOP}
+
 
 @app.get("/leaderboard")
-def api_get_leaderboard():
-    progress = f"""
-    🏆 **Your Progress** 🏆
-    
-    📊 **Stats:**
-    - 🪙 Total Coins Earned: {game_state.total_coins_earned}
-    - 🎯 Quizzes Completed: {game_state.quizzes_completed}
-    - 📺 Videos Watched: {game_state.videos_watched}
-    - 🔥 Current Level: {game_state.current_level}
-    
-    🎁 **Unlocked Perks:** {', '.join(game_state.unlocked_perks) if game_state.unlocked_perks else 'None yet - visit the shop!'}
-    
-    📈 **Today's Progress:**
-    - Videos: {game_state.daily_progress["videos"]} 📺
-    - Quizzes: {game_state.daily_progress["quizzes"]} 🎯
-    """
-    return {"leaderboard": progress}
+def api_get_leaderboard(student_id: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get leaderboard/progress information."""
+    if student_id:
+        game_state = get_or_create_game_state(db, student_id)
+        return {
+            "total_coins_earned": game_state.total_coins_earned,
+            "quizzes_completed": game_state.total_quizzes_completed,
+            "videos_watched": game_state.total_videos_watched,
+            "current_streak": game_state.current_streak,
+            "longest_streak": game_state.longest_streak,
+            "unlocked_perks": game_state.get_purchased_perks(),
+            "daily_progress": game_state.get_daily_progress(),
+        }
+
+    return {"message": "Provide student_id for personalized progress"}
+
 
 @app.get("/parent_dashboard")
-def api_get_parent_dashboard():
-    if not game_state.parent_authenticated:
-        raise HTTPException(status_code=403, detail="🔒 Please log in as parent first!")
+def api_get_parent_dashboard(
+    student_id: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get parent dashboard with child's progress."""
+    if not student_id:
+        # Get first student if no ID provided
+        student = db.query(Student).first()
+        if not student:
+            raise HTTPException(status_code=404, detail="No students found")
+        student_id = student.id
 
-    dashboard = f"""
-    👨‍👩‍👧‍👦 **Parent Dashboard** 👨‍👩‍👧‍👦
-    
-    📊 **Child's Progress:**
-    - 🎯 Quizzes Completed: {game_state.quizzes_completed}
-    - 📺 Videos Watched: {game_state.videos_watched}
-    - 🪙 Coins Earned: {game_state.total_coins_earned}
-    - 👀 Average Attention Score: {game_state.attention_score}%
-    
-    ⚙️ **Settings:**
-    - Webcam Monitoring: {"✅ Enabled" if True else "❌ Disabled"}
-    - Study Reminders: {"✅ Enabled" if True else "❌ Disabled"}
-    - Screen Time Limit: 2 hours/day
-    
-    📈 **Weekly Summary:**
-    Your child is doing great! They've maintained good focus and are learning consistently.
-    
-    💡 **Recommendations:**
-    - Encourage more Science videos
-    - Practice Math quizzes for better scores
-    - Celebrate achievements with family time!
-    """
-    return {"dashboard": dashboard}
+    game_state = get_or_create_game_state(db, student_id)
+    student = db.query(Student).filter(Student.id == student_id).first()
 
+    return {
+        "student_name": student.name if student else "Student",
+        "quizzes_completed": game_state.total_quizzes_completed,
+        "videos_watched": game_state.total_videos_watched,
+        "total_coins_earned": game_state.total_coins_earned,
+        "current_streak": game_state.current_streak,
+        "longest_streak": game_state.longest_streak,
+        "total_time_spent_minutes": game_state.total_time_spent_minutes,
+        "daily_progress": game_state.get_daily_progress(),
+    }
+
+
+# === AI Tutor Endpoints ===
 @app.post("/generate_roadmap")
 def api_generate_roadmap(req: RoadmapRequest):
+    """Generate a learning roadmap."""
     if not tutor_ready:
-        raise HTTPException(status_code=503, detail="The AI Tutor is not ready. Please check the setup.")
-    if not all([req.grade, req.board, req.subject]):
-        raise HTTPException(status_code=400, detail="Please select a grade, board, and subject to create a roadmap.")
+        raise HTTPException(status_code=503, detail="AI Tutor is not ready.")
 
-    roadmap = tutor_interface.generate_learning_roadmap(req.grade, req.board, req.subject)
+    if not all([req.grade, req.board, req.subject]):
+        raise HTTPException(status_code=400, detail="Please select grade, board, and subject.")
+
+    tutor = get_tutor_interface()
+    roadmap = tutor.generate_learning_roadmap(req.grade, req.board, req.subject)
     return {"roadmap": roadmap}
+
 
 @app.post("/chat_with_tutor")
 def api_chat_with_tutor(req: ChatRequest):
+    """Chat with the AI tutor."""
     if not tutor_ready:
         return {"response": "The AI Tutor is currently offline. Please try again later."}
 
     try:
-        bot_response = tutor_interface.chat_with_tutor(req.message, req.subject, req.grade)
+        tutor = get_tutor_interface()
+        bot_response = tutor.chat_with_tutor(req.message, req.subject, req.grade)
         return {"response": bot_response}
     except Exception as e:
-        # Fallback response if AI API fails
+        logger.error(f"Chat error: {e}")
         fallback_responses = {
-            "hello": f"Hello! I'm your AI tutor for {req.subject}. How can I help you learn today? 🤖",
-            "hi": f"Hi there! Ready to explore {req.subject}? What would you like to learn? 📚",
-            "help": f"I'm here to help you with {req.subject}! You can ask me questions about concepts, problems, or explanations. What specific topic interests you?",
+            "hello": f"Hello! I'm your AI tutor for {req.subject}. How can I help you learn today?",
+            "hi": f"Hi there! Ready to explore {req.subject}? What would you like to learn?",
+            "help": f"I'm here to help you with {req.subject}! What specific topic interests you?",
         }
-
-        response = fallback_responses.get(req.message.lower().strip(),
-            f"I understand you're asking about '{req.message}' in {req.subject}. While I'm having some connection issues with the advanced AI right now, I can still help! Could you be more specific about what you'd like to learn? 🎓")
-
+        response = fallback_responses.get(
+            req.message.lower().strip(),
+            f"I understand you're asking about '{req.message}' in {req.subject}. Could you be more specific?"
+        )
         return {"response": response}
 
-# Add more endpoints if needed (e.g., for daily progress reset, etc.)
 
+# === Main Entry Point ===
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting AI Tutor API...")
+    print("Starting AI Tutor API...")
     uvicorn.run("backend.api:app", host="127.0.0.1", port=8000, reload=False)

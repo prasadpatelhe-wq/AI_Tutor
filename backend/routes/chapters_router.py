@@ -1,31 +1,23 @@
-# backend/routers/chapters_router.py
+"""
+Chapters Router - Handles chapter retrieval by subject and ID.
+Uses shared dependencies for database access.
+"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from backend.database import SessionLocal
-from backend.models.chapter import Chapter
 
+# Use shared dependencies
+from backend.utils.dependencies import get_db
+
+from backend.models.chapter import Chapter
 
 router = APIRouter(prefix="/chapters", tags=["Chapters"])
 
 
-# -------------------------
-# DB Dependency
-# -------------------------
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-# ============================================================
-# 1️⃣ GET all chapters (optional, useful for debugging)
-# ============================================================
 @router.get("/")
 def get_all_chapters(db: Session = Depends(get_db)):
-    chapters = db.query(Chapter).order_by(Chapter.id).all()
+    """Get all chapters (useful for debugging)."""
+    chapters = db.query(Chapter).order_by(Chapter.subject_id, Chapter.order_index).all()
 
     return [
         {
@@ -40,12 +32,12 @@ def get_all_chapters(db: Session = Depends(get_db)):
     ]
 
 
-# ============================================================
-# 2️⃣ GET chapters by subject_id
-# Used when user selects subject → frontend dropdown
-# ============================================================
 @router.get("/by_subject/{subject_id}")
 def get_chapters_by_subject(subject_id: str, db: Session = Depends(get_db)):
+    """
+    Get all chapters for a given subject.
+    Used when user selects subject in frontend dropdown.
+    """
     chapters = (
         db.query(Chapter)
         .filter(Chapter.subject_id == subject_id)
@@ -53,9 +45,7 @@ def get_chapters_by_subject(subject_id: str, db: Session = Depends(get_db)):
         .all()
     )
 
-    if not chapters:
-        raise HTTPException(404, detail="No chapters found for this subject")
-
+    # Return empty list instead of 404 for valid subjects with no chapters
     return [
         {
             "id": c.id,
@@ -69,16 +59,16 @@ def get_chapters_by_subject(subject_id: str, db: Session = Depends(get_db)):
     ]
 
 
-# ============================================================
-# 3️⃣ GET chapter by ID
-# Used by frontend → generateQuiz() to fetch full chapter info
-# ============================================================
 @router.get("/{chapter_id}")
 def get_chapter_by_id(chapter_id: str, db: Session = Depends(get_db)):
+    """
+    Get chapter by ID.
+    Used by frontend to fetch full chapter info for quiz generation.
+    """
     chapter = db.query(Chapter).filter(Chapter.id == chapter_id).first()
 
     if not chapter:
-        raise HTTPException(404, detail=f"Chapter with ID {chapter_id} not found")
+        raise HTTPException(status_code=404, detail=f"Chapter with ID {chapter_id} not found")
 
     return {
         "id": chapter.id,
