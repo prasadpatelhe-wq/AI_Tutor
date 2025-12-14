@@ -43,10 +43,15 @@ def register_student(req: StudentRegisterRequest, db: Session = Depends(get_db))
         name=req.name,
         email=req.email,
         password=hash_password(req.password),
+        # New FK-based references
+        board_id=req.board_id,
+        grade_id=req.grade_id,
+        language_id=req.language_id,
+        # Legacy string fields (for backward compatibility)
         grade_band=req.grade_band,
         board=req.board,
         medium=req.medium,
-        is_active=1 # Default to active
+        is_active=1  # Default to active
     )
     db.add(new_student)
     db.commit()
@@ -85,7 +90,8 @@ def login_student(req: StudentLoginRequest, db: Session = Depends(get_db)):
             "name": student.name,
             "email": student.email,
             "grade_band": student.grade_band,
-            "board": student.board
+            "board": student.board,
+            "medium": student.medium  # Added for language pre-fill
         }
     }
 

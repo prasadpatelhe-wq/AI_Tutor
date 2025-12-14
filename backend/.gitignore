@@ -139,5 +139,6 @@ cython_debug/
 !/data/cache/.gitkeep
 /data/syllabi/*
 !/data/syllabi/.gitkeep
+/data/GRADE/
 
 ../.env

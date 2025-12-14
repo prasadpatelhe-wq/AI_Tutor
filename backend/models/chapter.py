@@ -1,8 +1,9 @@
 # backend/models/chapter.py
 
-from sqlalchemy import Column, Integer, String, Text, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from backend.database import Base
+from datetime import datetime
 import uuid
 
 class Chapter(Base):
@@ -14,7 +15,10 @@ class Chapter(Base):
     title = Column(String(255), nullable=False)
     description = Column(Text)
     order_index = Column(Integer)
+    
+    # Versioning
+    version = Column(Integer, default=1)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     subject = relationship("Subject", back_populates="chapters")
     subchapters = relationship("Subchapter", back_populates="chapter")
-    # quizzes = relationship("Quiz", back_populates="chapter") # Commenting out until Quiz is updated

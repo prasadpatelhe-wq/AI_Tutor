@@ -51,6 +51,11 @@ class StudentRegisterRequest(BaseModel):
     name: str
     email: str
     password: str
+    # FK-based references (preferred)
+    board_id: str | None = None
+    grade_id: str | None = None
+    language_id: str | None = None
+    # Legacy string fields (for backward compatibility)
     grade_band: str | None = None
     board: str | None = None
     medium: str | None = None
