@@ -1,5 +1,5 @@
 from backend.database import Base
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import uuid
@@ -24,6 +24,9 @@ class Student(Base):
 
     is_active = Column(Integer, default=1)
     phone = Column(String(20))
+    auth_provider = Column(String(20))  # "email_password" | "phone_otp"
+    goal = Column(String(50))  # "Exam marks" | "Concept clarity" | "Revision"
+    preferred_subject_ids = Column(Text)  # JSON-encoded list of subject IDs
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -31,4 +34,3 @@ class Student(Base):
     board_ref = relationship("Board", foreign_keys=[board_id])
     grade_ref = relationship("Grade", foreign_keys=[grade_id])
     language_ref = relationship("Language", foreign_keys=[language_id])
-

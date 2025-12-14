@@ -4,11 +4,15 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { loginStudent } from '../api';
-import { colors, fonts, radius, shadows, animations, spacing } from '../design/tokens';
+import {
+  loginStudent,
+  loginStudentOtp,
+  requestOtp,
+  requestPasswordReset,
+  confirmPasswordReset,
+} from '../api';
+import { colors, fonts, radius, shadows } from '../design/tokens';
 import Button from '../components/ui/Button';
-import Input from '../components/ui/Input';
-import Card from '../components/ui/Card';
 
 // Animated Particle Field Background
 const ParticleField = ({ theme = 'teen' }) => {
@@ -388,8 +392,23 @@ const Mascot = ({ theme = 'teen' }) => {
 
 // Main LoginView Component
 const LoginView = ({ onLoginSuccess, onNavigateToRegister, theme = 'teen' }) => {
+  const [loginMethod, setLoginMethod] = useState('email'); // 'email' | 'phone'
+  const [emailMode, setEmailMode] = useState('login'); // 'login' | 'reset'
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [devOtp, setDevOtp] = useState('');
+
+  const [resetOtpSent, setResetOtpSent] = useState(false);
+  const [resetOtp, setResetOtp] = useState('');
+  const [resetDevOtp, setResetDevOtp] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+
+  const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
@@ -400,28 +419,152 @@ const LoginView = ({ onLoginSuccess, onNavigateToRegister, theme = 'teen' }) => 
   const f = fonts[theme];
   const r = radius[theme];
   const sh = shadows[theme];
-  const sp = spacing[theme];
+
+  useEffect(() => {
+    setNotice('');
+    setError('');
+    setShowSuccess(false);
+    setLoading(false);
+    setFocusedField(null);
+    setEmailMode('login');
+    setResetOtpSent(false);
+    setResetOtp('');
+    setResetDevOtp('');
+    setResetNewPassword('');
+    setResetConfirmPassword('');
+    setOtp('');
+    setDevOtp('');
+    setOtpSent(false);
+  }, [loginMethod]);
+
+  const offlineGuard = () => {
+    if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+      setError('❌ You appear to be offline. Please reconnect and try again.');
+      return true;
+    }
+    return false;
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setNotice('');
     setError('');
-    setLoading(true);
+    if (offlineGuard()) return;
 
-    const result = await loginStudent({ email, password });
-    setLoading(false);
+    if (loginMethod === 'email' && emailMode === 'reset') {
+      if (!email.trim()) {
+        setError('Please enter your email address.');
+        return;
+      }
 
-    if (result.success) {
-      setShowSuccess(true);
-      setTimeout(() => onLoginSuccess(result.data.student), 1000);
-    } else {
+      if (!resetOtpSent) {
+        setLoading(true);
+        const res = await requestPasswordReset({ email });
+        setLoading(false);
+        if (!res.success) {
+          setError(res.message);
+          return;
+        }
+        setResetOtpSent(true);
+        setResetDevOtp(res.data?.dev_otp || '');
+        setNotice('✅ Password reset OTP sent. Check your email.');
+        return;
+      }
+
+      if (!resetOtp.trim()) {
+        setError('Please enter the OTP.');
+        return;
+      }
+      if (!resetNewPassword) {
+        setError('Please enter a new password.');
+        return;
+      }
+      if (resetNewPassword !== resetConfirmPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
+
+      setLoading(true);
+      const res = await confirmPasswordReset({ email, otp: resetOtp, newPassword: resetNewPassword });
+      setLoading(false);
+      if (!res.success) {
+        setError(res.message);
+        return;
+      }
+
+      setNotice('✅ Password updated. Please sign in.');
+      setEmailMode('login');
+      setPassword('');
+      setResetOtpSent(false);
+      setResetOtp('');
+      setResetDevOtp('');
+      setResetNewPassword('');
+      setResetConfirmPassword('');
+      return;
+    }
+
+    if (loginMethod === 'email') {
+      setLoading(true);
+
+      const result = await loginStudent({ email, password });
+      setLoading(false);
+
+      if (result.success) {
+        setShowSuccess(true);
+        setTimeout(() => onLoginSuccess(result.data.student), 1000);
+        return;
+      }
+
       setError(result.message);
-      // Shake animation
       if (formRef.current) {
         formRef.current.style.animation = 'shake 0.5s ease-in-out';
         setTimeout(() => {
           if (formRef.current) formRef.current.style.animation = '';
         }, 500);
       }
+      return;
+    }
+
+    // Phone OTP login
+    if (!phone.trim()) {
+      setError('Please enter your phone number.');
+      return;
+    }
+
+    if (!otpSent) {
+      setLoading(true);
+      const res = await requestOtp({ channel: 'phone', identifier: phone, purpose: 'login' });
+      setLoading(false);
+      if (!res.success) {
+        setError(res.message);
+        return;
+      }
+      setOtpSent(true);
+      setDevOtp(res.data?.dev_otp || '');
+      return;
+    }
+
+    if (!otp.trim()) {
+      setError('Please enter the OTP.');
+      return;
+    }
+
+    setLoading(true);
+    const res = await loginStudentOtp({ phone, otp });
+    setLoading(false);
+
+    if (res.success) {
+      setShowSuccess(true);
+      setTimeout(() => onLoginSuccess(res.data.student), 1000);
+      return;
+    }
+
+    setError(res.message);
+    if (formRef.current) {
+      formRef.current.style.animation = 'shake 0.5s ease-in-out';
+      setTimeout(() => {
+        if (formRef.current) formRef.current.style.animation = '';
+      }, 500);
     }
   };
 
@@ -539,6 +682,29 @@ const LoginView = ({ onLoginSuccess, onNavigateToRegister, theme = 'teen' }) => 
       alignItems: 'center',
       gap: '8px',
     },
+    notice: {
+      background: `${c.success}15`,
+      border: `1px solid ${c.success}30`,
+      color: c.success,
+      padding: '12px 16px',
+      borderRadius: r.md,
+      marginBottom: '20px',
+      fontSize: '0.9rem',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      whiteSpace: 'pre-wrap',
+    },
+    helperRow: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: '-10px',
+      marginBottom: '18px',
+      color: c.textMuted,
+      fontSize: '0.85rem',
+      gap: '12px',
+    },
     divider: {
       display: 'flex',
       alignItems: 'center',
@@ -564,7 +730,71 @@ const LoginView = ({ onLoginSuccess, onNavigateToRegister, theme = 'teen' }) => 
       transition: 'all 0.3s ease',
       position: 'relative',
     },
-  }), [theme, c, f, r, sh, sp, focusedField, showSuccess]);
+    toggleRow: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '12px',
+      margin: '20px 0 18px 0',
+    },
+    toggleButtonBase: {
+      borderRadius: r.md,
+      padding: '12px 14px',
+      fontFamily: f.body,
+      fontWeight: 700,
+      fontSize: '0.9rem',
+      cursor: 'pointer',
+      transition: 'all 0.25s ease',
+      border: `1px solid ${theme === 'teen' ? 'rgba(255,255,255,0.14)' : c.primaryLight}`,
+      background: theme === 'teen' ? 'rgba(255,255,255,0.06)' : 'rgba(255,255,255,0.8)',
+      color: c.text,
+    },
+    toggleActive: {
+      border: `1px solid ${c.primary}`,
+      boxShadow: theme === 'teen' ? `0 0 18px ${c.primary}35` : `0 10px 28px ${c.primary}25`,
+      transform: 'translateY(-1px)',
+    },
+  }), [theme, c, f, r, sh, focusedField, showSuccess]);
+
+  const resendResetOtp = async () => {
+    setNotice('');
+    setError('');
+    if (offlineGuard()) return;
+    if (!email.trim()) {
+      setError('Please enter your email address.');
+      return;
+    }
+    setLoading(true);
+    const res = await requestPasswordReset({ email });
+    setLoading(false);
+    if (!res.success) {
+      setError(res.message);
+      return;
+    }
+    setResetOtpSent(true);
+    setResetDevOtp(res.data?.dev_otp || '');
+    setNotice('✅ Password reset OTP resent.');
+  };
+
+  const submitLabel = () => {
+    if (loading) {
+      if (loginMethod === 'phone' && !otpSent) return 'Sending OTP...';
+      if (loginMethod === 'email' && emailMode === 'reset' && !resetOtpSent) return 'Sending OTP...';
+      if (loginMethod === 'email' && emailMode === 'reset') return 'Updating Password...';
+      return 'Signing In...';
+    }
+
+    if (loginMethod === 'email' && emailMode === 'reset') {
+      return resetOtpSent ? (theme === 'teen' ? '🔁 RESET PASSWORD' : 'Reset Password →') : (theme === 'teen' ? '📩 SEND RESET OTP' : 'Send Reset OTP →');
+    }
+
+    return loginMethod === 'phone'
+      ? (otpSent ? '✅ VERIFY & LOGIN' : '📩 SEND OTP')
+      : theme === 'kids'
+        ? "🚀 Let's Go!"
+        : theme === 'teen'
+          ? '⚡ LOGIN'
+          : 'Sign In →';
+  };
 
   return (
     <>
@@ -653,6 +883,14 @@ const LoginView = ({ onLoginSuccess, onNavigateToRegister, theme = 'teen' }) => 
                   : 'Continue your learning journey'}
               </p>
 
+              {/* Notice */}
+              {notice && (
+                <div style={styles.notice}>
+                  <span>✅</span>
+                  {notice}
+                </div>
+              )}
+
               {/* Error */}
               {error && (
                 <div style={styles.error}>
@@ -661,63 +899,312 @@ const LoginView = ({ onLoginSuccess, onNavigateToRegister, theme = 'teen' }) => 
                 </div>
               )}
 
+              {/* Login method toggle */}
+              <div style={styles.toggleRow}>
+                <button
+                  type="button"
+                  onClick={() => setLoginMethod('email')}
+                  style={{
+                    ...styles.toggleButtonBase,
+                    ...(loginMethod === 'email' ? styles.toggleActive : {}),
+                  }}
+                >
+                  📧 Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLoginMethod('phone')}
+                  style={{
+                    ...styles.toggleButtonBase,
+                    ...(loginMethod === 'phone' ? styles.toggleActive : {}),
+                  }}
+                >
+                  📱 Phone OTP
+                </button>
+              </div>
+
               {/* Form */}
               <form onSubmit={handleSubmit}>
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>
-                    {theme === 'kids' ? '📧 Email' : 'Email Address'}
-                  </label>
-                  <div style={styles.inputWrapper}>
-                    <span style={{
-                      ...styles.inputIcon,
-                      color: focusedField === 'email' ? c.primary : c.textMuted,
-                    }}>
-                      {theme === 'kids' ? '✉️' : '📧'}
-                    </span>
-                    <input
-                      type="email"
-                      placeholder={theme === 'kids' ? 'your.email@example.com' : 'Enter your email'}
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      onFocus={() => setFocusedField('email')}
-                      onBlur={() => setFocusedField(null)}
-                      required
-                      style={{
-                        ...styles.input,
-                        borderColor: focusedField === 'email' ? c.primary : (theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight),
-                        boxShadow: focusedField === 'email' ? `0 0 0 3px ${c.primary}20` : 'none',
-                      }}
-                    />
-                  </div>
-                </div>
+                {loginMethod === 'email' ? (
+                  <>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>
+                        {theme === 'kids' ? '📧 Email' : 'Email Address'}
+                      </label>
+                      <div style={styles.inputWrapper}>
+                        <span style={{
+                          ...styles.inputIcon,
+                          color: focusedField === 'email' ? c.primary : c.textMuted,
+                        }}>
+                          {theme === 'kids' ? '✉️' : '📧'}
+                        </span>
+                        <input
+                          type="email"
+                          placeholder={theme === 'kids' ? 'your.email@example.com' : 'Enter your email'}
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          onFocus={() => setFocusedField('email')}
+                          onBlur={() => setFocusedField(null)}
+                          required
+                          style={{
+                            ...styles.input,
+                            borderColor: focusedField === 'email' ? c.primary : (theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight),
+                            boxShadow: focusedField === 'email' ? `0 0 0 3px ${c.primary}20` : 'none',
+                          }}
+                        />
+                      </div>
+                    </div>
 
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>
-                    {theme === 'kids' ? '🔐 Password' : 'Password'}
-                  </label>
-                  <div style={styles.inputWrapper}>
-                    <span style={{
-                      ...styles.inputIcon,
-                      color: focusedField === 'password' ? c.primary : c.textMuted,
-                    }}>
-                      {theme === 'kids' ? '🔒' : '🔐'}
-                    </span>
-                    <input
-                      type="password"
-                      placeholder={theme === 'kids' ? 'Your secret password' : 'Enter your password'}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      onFocus={() => setFocusedField('password')}
-                      onBlur={() => setFocusedField(null)}
-                      required
-                      style={{
-                        ...styles.input,
-                        borderColor: focusedField === 'password' ? c.primary : (theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight),
-                        boxShadow: focusedField === 'password' ? `0 0 0 3px ${c.primary}20` : 'none',
-                      }}
-                    />
-                  </div>
-                </div>
+                    {emailMode === 'login' ? (
+                      <>
+                        <div style={styles.formGroup}>
+                          <label style={styles.label}>
+                            {theme === 'kids' ? '🔐 Password' : 'Password'}
+                          </label>
+                          <div style={styles.inputWrapper}>
+                            <span style={{
+                              ...styles.inputIcon,
+                              color: focusedField === 'password' ? c.primary : c.textMuted,
+                            }}>
+                              {theme === 'kids' ? '🔒' : '🔐'}
+                            </span>
+                            <input
+                              type="password"
+                              placeholder={theme === 'kids' ? 'Your secret password' : 'Enter your password'}
+                              value={password}
+                              onChange={(e) => setPassword(e.target.value)}
+                              onFocus={() => setFocusedField('password')}
+                              onBlur={() => setFocusedField(null)}
+                              required
+                              style={{
+                                ...styles.input,
+                                borderColor: focusedField === 'password' ? c.primary : (theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight),
+                                boxShadow: focusedField === 'password' ? `0 0 0 3px ${c.primary}20` : 'none',
+                              }}
+                            />
+                          </div>
+                        </div>
+
+                        <div style={styles.helperRow}>
+                          <span />
+                          <span
+                            className="link-hover"
+                            onClick={() => {
+                              setNotice('');
+                              setError('');
+                              setEmailMode('reset');
+                              setResetOtpSent(false);
+                              setResetOtp('');
+                              setResetDevOtp('');
+                              setResetNewPassword('');
+                              setResetConfirmPassword('');
+                            }}
+                            style={styles.link}
+                          >
+                            Forgot password?
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {resetOtpSent ? (
+                          <>
+                            <div style={styles.formGroup}>
+                              <label style={styles.label}>
+                                {theme === 'kids' ? '🔢 OTP' : 'Reset OTP'}
+                              </label>
+                              <div style={styles.inputWrapper}>
+                                <span style={{
+                                  ...styles.inputIcon,
+                                  color: focusedField === 'resetOtp' ? c.primary : c.textMuted,
+                                }}>
+                                  🔢
+                                </span>
+                                <input
+                                  type="text"
+                                  inputMode="numeric"
+                                  placeholder="6-digit code"
+                                  value={resetOtp}
+                                  onChange={(e) => setResetOtp(e.target.value)}
+                                  onFocus={() => setFocusedField('resetOtp')}
+                                  onBlur={() => setFocusedField(null)}
+                                  required
+                                  style={{
+                                    ...styles.input,
+                                    borderColor: focusedField === 'resetOtp' ? c.primary : (theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight),
+                                    boxShadow: focusedField === 'resetOtp' ? `0 0 0 3px ${c.primary}20` : 'none',
+                                  }}
+                                />
+                              </div>
+                              {resetDevOtp ? (
+                                <div style={{ marginTop: '10px', fontSize: '0.85rem', color: c.textMuted }}>
+                                  Dev OTP: <span style={{ fontFamily: 'monospace', color: c.text }}>{resetDevOtp}</span>
+                                </div>
+                              ) : null}
+                            </div>
+
+                            <div style={styles.formGroup}>
+                              <label style={styles.label}>
+                                {theme === 'kids' ? '🆕 New Password' : 'New Password'}
+                              </label>
+                              <div style={styles.inputWrapper}>
+                                <span style={{
+                                  ...styles.inputIcon,
+                                  color: focusedField === 'resetNewPassword' ? c.primary : c.textMuted,
+                                }}>
+                                  🔑
+                                </span>
+                                <input
+                                  type="password"
+                                  placeholder={theme === 'kids' ? 'New password' : 'Enter new password'}
+                                  value={resetNewPassword}
+                                  onChange={(e) => setResetNewPassword(e.target.value)}
+                                  onFocus={() => setFocusedField('resetNewPassword')}
+                                  onBlur={() => setFocusedField(null)}
+                                  required
+                                  style={{
+                                    ...styles.input,
+                                    borderColor: focusedField === 'resetNewPassword' ? c.primary : (theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight),
+                                    boxShadow: focusedField === 'resetNewPassword' ? `0 0 0 3px ${c.primary}20` : 'none',
+                                  }}
+                                />
+                              </div>
+                            </div>
+
+                            <div style={styles.formGroup}>
+                              <label style={styles.label}>
+                                {theme === 'kids' ? '✅ Confirm' : 'Confirm Password'}
+                              </label>
+                              <div style={styles.inputWrapper}>
+                                <span style={{
+                                  ...styles.inputIcon,
+                                  color: focusedField === 'resetConfirmPassword' ? c.primary : c.textMuted,
+                                }}>
+                                  ✅
+                                </span>
+                                <input
+                                  type="password"
+                                  placeholder={theme === 'kids' ? 'Repeat password' : 'Confirm new password'}
+                                  value={resetConfirmPassword}
+                                  onChange={(e) => setResetConfirmPassword(e.target.value)}
+                                  onFocus={() => setFocusedField('resetConfirmPassword')}
+                                  onBlur={() => setFocusedField(null)}
+                                  required
+                                  style={{
+                                    ...styles.input,
+                                    borderColor: focusedField === 'resetConfirmPassword' ? c.primary : (theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight),
+                                    boxShadow: focusedField === 'resetConfirmPassword' ? `0 0 0 3px ${c.primary}20` : 'none',
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </>
+                        ) : (
+                          <div style={{ ...styles.helperRow, marginTop: '0', marginBottom: '20px' }}>
+                            <span>Enter your email to get an OTP.</span>
+                            <span />
+                          </div>
+                        )}
+
+                        <div style={styles.helperRow}>
+                          <span
+                            className="link-hover"
+                            onClick={() => {
+                              setNotice('');
+                              setError('');
+                              setEmailMode('login');
+                              setResetOtpSent(false);
+                              setResetOtp('');
+                              setResetDevOtp('');
+                              setResetNewPassword('');
+                              setResetConfirmPassword('');
+                            }}
+                            style={styles.link}
+                          >
+                            ← Back to sign in
+                          </span>
+                          {resetOtpSent ? (
+                            <span
+                              className="link-hover"
+                              onClick={resendResetOtp}
+                              style={styles.link}
+                            >
+                              Resend OTP
+                            </span>
+                          ) : (
+                            <span />
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>
+                        {theme === 'kids' ? '📱 Phone' : 'Phone Number'}
+                      </label>
+                      <div style={styles.inputWrapper}>
+                        <span style={{
+                          ...styles.inputIcon,
+                          color: focusedField === 'phone' ? c.primary : c.textMuted,
+                        }}>
+                          📱
+                        </span>
+                        <input
+                          type="tel"
+                          placeholder={theme === 'kids' ? 'Your phone number' : '10-digit (India) or +countrycode...'}
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          onFocus={() => setFocusedField('phone')}
+                          onBlur={() => setFocusedField(null)}
+                          required
+                          style={{
+                            ...styles.input,
+                            borderColor: focusedField === 'phone' ? c.primary : (theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight),
+                            boxShadow: focusedField === 'phone' ? `0 0 0 3px ${c.primary}20` : 'none',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {otpSent && (
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>
+                          {theme === 'kids' ? '🔢 OTP' : 'OTP'}
+                        </label>
+                        <div style={styles.inputWrapper}>
+                          <span style={{
+                            ...styles.inputIcon,
+                            color: focusedField === 'otp' ? c.primary : c.textMuted,
+                          }}>
+                            🔐
+                          </span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="6-digit code"
+                            value={otp}
+                            onChange={(e) => setOtp(e.target.value)}
+                            onFocus={() => setFocusedField('otp')}
+                            onBlur={() => setFocusedField(null)}
+                            required
+                            style={{
+                              ...styles.input,
+                              borderColor: focusedField === 'otp' ? c.primary : (theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight),
+                              boxShadow: focusedField === 'otp' ? `0 0 0 3px ${c.primary}20` : 'none',
+                            }}
+                          />
+                        </div>
+                        {devOtp ? (
+                          <div style={{ marginTop: '10px', fontSize: '0.85rem', color: c.textMuted }}>
+                            Dev OTP: <span style={{ fontFamily: 'monospace', color: c.text }}>{devOtp}</span>
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {/* Submit Button */}
                 <Button
@@ -730,14 +1217,35 @@ const LoginView = ({ onLoginSuccess, onNavigateToRegister, theme = 'teen' }) => 
                   glow
                   style={{ marginTop: '8px' }}
                 >
-                  {loading
-                    ? 'Signing In...'
-                    : theme === 'kids'
-                      ? "🚀 Let's Go!"
-                      : theme === 'teen'
-                        ? '⚡ LOGIN'
-                        : 'Sign In →'}
+                  {submitLabel()}
                 </Button>
+
+                {loginMethod === 'phone' && otpSent && (
+                  <div style={{ marginTop: '12px' }}>
+                    <Button
+                      type="button"
+                      variant="glass"
+                      size="md"
+                      theme={theme}
+                      fullWidth
+                      disabled={loading}
+                      onClick={async () => {
+                        setError('');
+                        if (offlineGuard()) return;
+                        setLoading(true);
+                        const res = await requestOtp({ channel: 'phone', identifier: phone, purpose: 'login' });
+                        setLoading(false);
+                        if (!res.success) {
+                          setError(res.message);
+                          return;
+                        }
+                        setDevOtp(res.data?.dev_otp || '');
+                      }}
+                    >
+                      Resend OTP
+                    </Button>
+                  </div>
+                )}
               </form>
 
               {/* Divider */}

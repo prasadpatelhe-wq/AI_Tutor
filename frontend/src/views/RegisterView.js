@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { registerStudent } from '../api';
+import { registerStudent, registerStudentOtp, requestOtp } from '../api';
 import { fetchGrades, fetchBoards, fetchLanguages } from '../meta';
-import { colors, fonts, radius, shadows, animations, spacing } from '../design/tokens';
+import { colors, fonts, radius, shadows } from '../design/tokens';
 import Button from '../components/ui/Button';
 
 // Geometric Background Pattern
@@ -305,6 +305,7 @@ const Celebration = ({ theme = 'teen' }) => {
 
 // Main RegisterView Component
 const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) => {
+  const [signupMethod, setSignupMethod] = useState('email'); // 'email' | 'phone'
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -317,6 +318,12 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
     board: '',
     medium: '',
   });
+
+  const [consent, setConsent] = useState(true);
+  const [phone, setPhone] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [devOtp, setDevOtp] = useState('');
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -333,7 +340,15 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
   const f = fonts[theme];
   const r = radius[theme];
   const sh = shadows[theme];
-  const sp = spacing[theme];
+
+  useEffect(() => {
+    setError('');
+    setLoading(false);
+    setFocusedField(null);
+    setOtpSent(false);
+    setOtp('');
+    setDevOtp('');
+  }, [signupMethod]);
 
   // Fetch metadata
   useEffect(() => {
@@ -371,20 +386,38 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
 
   // Update progress step
   useEffect(() => {
-    if (formData.name && formData.email) {
-      if (formData.password && formData.confirmPassword) {
-        if (formData.grade_band && formData.board) {
+    if (signupMethod === 'email') {
+      if (formData.email) {
+        if (formData.password && formData.confirmPassword) {
           setCurrentStep(2);
         } else {
-          setCurrentStep(2);
+          setCurrentStep(1);
         }
+      } else {
+        setCurrentStep(0);
+      }
+      return;
+    }
+
+    // phone OTP
+    if (phone.trim()) {
+      if (otpSent && otp.trim()) {
+        setCurrentStep(2);
       } else {
         setCurrentStep(1);
       }
     } else {
       setCurrentStep(0);
     }
-  }, [formData]);
+  }, [signupMethod, formData.email, formData.password, formData.confirmPassword, phone, otpSent, otp]);
+
+  const offlineGuard = () => {
+    if (typeof navigator !== 'undefined' && navigator && navigator.onLine === false) {
+      setError('❌ You appear to be offline. Please reconnect and try again.');
+      return true;
+    }
+    return false;
+  };
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -424,25 +457,74 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
     e.preventDefault();
     setError('');
 
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      if (formRef.current) {
-        formRef.current.style.animation = 'shake 0.5s ease-in-out';
-        setTimeout(() => {
-          if (formRef.current) formRef.current.style.animation = '';
-        }, 500);
-      }
+    if (offlineGuard()) return;
+
+    if (!consent) {
+      setError('Please provide consent to continue.');
       return;
+    }
+
+    if (signupMethod === 'email') {
+      if (formData.password !== formData.confirmPassword) {
+        setError('Passwords do not match');
+        if (formRef.current) {
+          formRef.current.style.animation = 'shake 0.5s ease-in-out';
+          setTimeout(() => {
+            if (formRef.current) formRef.current.style.animation = '';
+          }, 500);
+        }
+        return;
+      }
+    } else {
+      if (!phone.trim()) {
+        setError('Please enter your phone number.');
+        return;
+      }
+      if (otpSent && !otp.trim()) {
+        setError('Please enter the OTP.');
+        return;
+      }
     }
 
     setLoading(true);
     try {
-      const result = await registerStudent(formData);
+      if (signupMethod === 'phone' && !otpSent) {
+        const res = await requestOtp({ channel: 'phone', identifier: phone, purpose: 'register' });
+        if (res.success) {
+          setOtpSent(true);
+          setDevOtp(res.data?.dev_otp || '');
+          setLoading(false);
+          return;
+        }
+
+        setError(res.message);
+        setLoading(false);
+        return;
+      }
+
+      const result = signupMethod === 'phone'
+        ? await registerStudentOtp({
+            phone,
+            otp,
+            consent,
+            name: (formData.name || '').trim() || undefined,
+            board_id: formData.board_id,
+            grade_id: formData.grade_id,
+            language_id: formData.language_id,
+            grade_band: formData.grade_band,
+            board: formData.board,
+            medium: formData.medium,
+          })
+        : await registerStudent({ ...formData, consent });
+
       if (result.success) {
         setShowCelebration(true);
         setTimeout(() => onRegisterSuccess(), 2000);
       } else {
         setError(result.message);
+        if (signupMethod === 'phone' && /already exists|log in/i.test(result.message || '')) {
+          // keep UX simple: let user tap Sign In link below
+        }
         if (formRef.current) {
           formRef.current.style.animation = 'shake 0.5s ease-in-out';
           setTimeout(() => {
@@ -539,6 +621,31 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
       textAlign: 'center',
       marginBottom: '24px',
     },
+    methodToggle: {
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '10px',
+      marginBottom: '20px',
+    },
+    methodButton: (active) => ({
+      width: '100%',
+      padding: '12px 14px',
+      borderRadius: r.md,
+      border: `2px solid ${active ? c.primary : theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight}`,
+      background: active
+        ? theme === 'teen'
+          ? `linear-gradient(135deg, ${c.primary}22 0%, ${c.secondary}22 100%)`
+          : 'rgba(255,255,255,0.85)'
+        : theme === 'teen'
+          ? 'rgba(255,255,255,0.06)'
+          : 'rgba(255,255,255,0.95)',
+      color: c.text,
+      fontFamily: f.display,
+      fontWeight: 700,
+      cursor: 'pointer',
+      transition: 'all 0.25s ease',
+      userSelect: 'none',
+    }),
     formRow: {
       display: 'grid',
       gridTemplateColumns: '1fr 1fr',
@@ -607,6 +714,37 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
       alignItems: 'center',
       gap: '8px',
     },
+    consentRow: {
+      display: 'flex',
+      alignItems: 'flex-start',
+      gap: '10px',
+      marginTop: '12px',
+      marginBottom: '8px',
+      color: c.textMuted,
+      fontSize: '0.85rem',
+      lineHeight: 1.4,
+    },
+    checkbox: {
+      marginTop: '2px',
+      width: '18px',
+      height: '18px',
+      accentColor: c.primary,
+    },
+    otpHint: {
+      marginTop: '10px',
+      color: c.textMuted,
+      fontSize: '0.85rem',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '10px',
+    },
+    devOtp: {
+      fontFamily: 'monospace',
+      color: c.accent1,
+      fontWeight: 800,
+      letterSpacing: '0.5px',
+    },
     loginLink: {
       textAlign: 'center',
       marginTop: '24px',
@@ -621,6 +759,40 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
       transition: 'color 0.3s ease',
     },
   }), [theme, c, f, r, sh, showCelebration]);
+
+  const resendOtp = async () => {
+    setError('');
+    if (offlineGuard()) return;
+    if (!phone.trim()) {
+      setError('Please enter your phone number.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await requestOtp({ channel: 'phone', identifier: phone, purpose: 'register' });
+      if (!res.success) {
+        setError(res.message);
+        return;
+      }
+      setOtpSent(true);
+      setDevOtp(res.data?.dev_otp || '');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const submitLabel = () => {
+    if (signupMethod === 'phone' && !otpSent) {
+      if (loading) return 'Sending OTP...';
+      return theme === 'kids' ? '📲 Send OTP' : theme === 'teen' ? '📲 SEND OTP' : 'Send OTP →';
+    }
+    if (loading) return 'Creating Account...';
+    return theme === 'kids'
+      ? "🚀 Let's Go!"
+      : theme === 'teen'
+        ? '⚡ CREATE ACCOUNT'
+        : 'Create Account →';
+  };
 
   return (
     <>
@@ -722,6 +894,24 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
                   : 'Set up your learning profile'}
               </p>
 
+              {/* Signup method */}
+              <div style={styles.methodToggle}>
+                <button
+                  type="button"
+                  onClick={() => setSignupMethod('email')}
+                  style={styles.methodButton(signupMethod === 'email')}
+                >
+                  Email
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSignupMethod('phone')}
+                  style={styles.methodButton(signupMethod === 'phone')}
+                >
+                  Phone OTP
+                </button>
+              </div>
+
               {/* Error */}
               {error && (
                 <div style={styles.error}>
@@ -747,7 +937,6 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
                     onChange={handleChange}
                     onFocus={() => setFocusedField('name')}
                     onBlur={() => setFocusedField(null)}
-                    required
                     style={{
                       ...styles.input,
                       borderColor: focusedField === 'name' ? c.primary : styles.input.border.split(' ')[2],
@@ -755,64 +944,136 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
                   />
                 </div>
 
-                {/* Email */}
-                <div style={styles.formGroup}>
-                  <label style={styles.label}>
-                    <span>{theme === 'kids' ? '📧' : '◎'}</span>
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    name="email"
-                    className="form-input"
-                    placeholder="name@example.com"
-                    value={formData.email}
-                    onChange={handleChange}
-                    onFocus={() => setFocusedField('email')}
-                    onBlur={() => setFocusedField(null)}
-                    required
-                    style={{
-                      ...styles.input,
-                      borderColor: focusedField === 'email' ? c.primary : styles.input.border.split(' ')[2],
-                    }}
-                  />
-                </div>
+                {signupMethod === 'email' ? (
+                  <>
+                    {/* Email */}
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>
+                        <span>{theme === 'kids' ? '📧' : '◎'}</span>
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        name="email"
+                        className="form-input"
+                        placeholder="name@example.com"
+                        value={formData.email}
+                        onChange={handleChange}
+                        onFocus={() => setFocusedField('email')}
+                        onBlur={() => setFocusedField(null)}
+                        required
+                        style={{
+                          ...styles.input,
+                          borderColor: focusedField === 'email' ? c.primary : styles.input.border.split(' ')[2],
+                        }}
+                      />
+                    </div>
 
-                {/* Password row */}
-                <div style={styles.formRow}>
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>
-                      <span>{theme === 'kids' ? '🔐' : '◈'}</span>
-                      Password
-                    </label>
-                    <input
-                      type="password"
-                      name="password"
-                      className="form-input"
-                      placeholder="••••••••"
-                      value={formData.password}
-                      onChange={handleChange}
-                      required
-                      style={styles.input}
-                    />
-                  </div>
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>
-                      <span>{theme === 'kids' ? '🔒' : '◈'}</span>
-                      Confirm
-                    </label>
-                    <input
-                      type="password"
-                      name="confirmPassword"
-                      className="form-input"
-                      placeholder="••••••••"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      required
-                      style={styles.input}
-                    />
-                  </div>
-                </div>
+                    {/* Password row */}
+                    <div style={styles.formRow}>
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>
+                          <span>{theme === 'kids' ? '🔐' : '◈'}</span>
+                          Password
+                        </label>
+                        <input
+                          type="password"
+                          name="password"
+                          className="form-input"
+                          placeholder="••••••••"
+                          value={formData.password}
+                          onChange={handleChange}
+                          required
+                          style={styles.input}
+                        />
+                      </div>
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>
+                          <span>{theme === 'kids' ? '🔒' : '◈'}</span>
+                          Confirm
+                        </label>
+                        <input
+                          type="password"
+                          name="confirmPassword"
+                          className="form-input"
+                          placeholder="••••••••"
+                          value={formData.confirmPassword}
+                          onChange={handleChange}
+                          required
+                          style={styles.input}
+                        />
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Phone */}
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>
+                        <span>{theme === 'kids' ? '📱' : '◎'}</span>
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        name="phone"
+                        className="form-input"
+                        placeholder="9876543210"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        onFocus={() => setFocusedField('phone')}
+                        onBlur={() => setFocusedField(null)}
+                        required
+                        style={{
+                          ...styles.input,
+                          borderColor: focusedField === 'phone' ? c.primary : styles.input.border.split(' ')[2],
+                        }}
+                      />
+                    </div>
+
+                    {/* OTP */}
+                    {otpSent && (
+                      <div style={styles.formGroup}>
+                        <label style={styles.label}>
+                          <span>{theme === 'kids' ? '🔢' : '◈'}</span>
+                          OTP
+                        </label>
+                        <input
+                          type="text"
+                          name="otp"
+                          className="form-input"
+                          placeholder="Enter OTP"
+                          value={otp}
+                          onChange={(e) => setOtp(e.target.value)}
+                          onFocus={() => setFocusedField('otp')}
+                          onBlur={() => setFocusedField(null)}
+                          style={{
+                            ...styles.input,
+                            borderColor: focusedField === 'otp' ? c.primary : styles.input.border.split(' ')[2],
+                          }}
+                        />
+
+                        <div style={styles.otpHint}>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            theme={theme}
+                            onClick={resendOtp}
+                            disabled={loading}
+                            style={{ padding: '6px 8px', textTransform: 'none' }}
+                          >
+                            Resend OTP
+                          </Button>
+                          {devOtp && (
+                            <span>
+                              Dev OTP: <span style={styles.devOtp}>{devOtp}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {/* Board & Grade row */}
                 <div style={styles.formRow}>
@@ -877,6 +1138,19 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
                   </select>
                 </div>
 
+                {/* Consent */}
+                <label style={styles.consentRow}>
+                  <input
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
+                    style={styles.checkbox}
+                  />
+                  <span>
+                    I agree to the basic consent for using AI Tutor and receiving verification messages.
+                  </span>
+                </label>
+
                 {/* Submit */}
                 <Button
                   type="submit"
@@ -888,13 +1162,7 @@ const RegisterView = ({ onRegisterSuccess, onNavigateToLogin, theme = 'teen' }) 
                   glow
                   style={{ marginTop: '8px' }}
                 >
-                  {loading
-                    ? 'Creating Account...'
-                    : theme === 'kids'
-                      ? "🚀 Let's Go!"
-                      : theme === 'teen'
-                        ? '⚡ CREATE ACCOUNT'
-                        : 'Create Account →'}
+                  {submitLabel()}
                 </Button>
               </form>
 

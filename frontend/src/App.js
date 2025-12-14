@@ -1,751 +1,682 @@
-import React, { useContext, useEffect, useState, useMemo } from "react";
-import FlashcardView from "./FlashcardView";
-import { SyllabusContext } from "./SyllabusContext";
-import { fetchSubjects, fetchGrades, fetchBoards, fetchLanguages } from "./meta";
+/**
+ * AI Tutor - Main Application with New Design & Guest Mode
+ */
 
-// Import modular components
-import WelcomeView from "./views/WelcomeView";
-import SelectionView from "./views/SelectionView";
-import ChapterSelectionView from "./views/ChapterSelectionView";
-import SubchapterSelectionView from "./views/SubchapterSelectionView";
-import DashboardView from "./views/DashboardView";
-import VideoView from "./views/VideoView";
-import QuizView from "./views/QuizView";
-import RewardsView from "./views/RewardsView";
-import ChatView from "./views/ChatView";
-import ParentView from "./views/ParentView";
-import LoginView from "./views/LoginView";
-import RegisterView from "./views/RegisterView";
+import React, { useState, useEffect, useContext, useMemo } from 'react';
+import { SyllabusContext } from './SyllabusContext';
+import { ThemeProvider } from './ThemeContext';
+import { fetchSubjects, fetchGrades, fetchBoards } from './meta';
 
-// Import animation components
-import AnimatedBackground from "./components/AnimatedBackground";
+// New Design Components
+import MainLayout from './layouts/MainLayout';
+import NewDashboardView from './views/NewDashboardView';
+import LearnView from './views/LearnView';
+import ChapterPageView from './views/ChapterPageView';
+import StudyTogetherView from './views/StudyTogetherView';
+import ReviewView from './views/ReviewView';
+import ProfileView from './views/ProfileView';
+import { colors, typography, spacing, googleFontsUrl, generateCSSVariables } from './design/designSystem';
 
-// Import theme system and dynamic styles
-import { ThemeProvider, useTheme } from "./ThemeContext";
-import { getThemeFromGrade, getThemeNameFromGrade } from "./themes";
-import getThemedStyles from "./styles";
+// Auth / Entry Views (keep existing UI)
+import LoginView from './views/LoginView';
+import RegisterView from './views/RegisterView';
+import ParentEntryView from './views/ParentEntryView';
+
+// API Functions
 import {
-  verifyParentPin as apiVerifyParentPin,
-  logoutParent as apiLogoutParent,
-  getVideoForSubject as apiGetVideoForSubject,
-  simulateAttentionCheck as apiSimulateAttentionCheck,
-  completeVideoWatching as apiCompleteVideoWatching,
-  generateQuiz as apiGenerateQuiz,
-  calculateQuizScore as apiCalculateQuizScore,
-  buyPerk as apiBuyPerk,
-  generateLearningRoadmap as apiGenerateLearningRoadmap,
   chatWithTutor as apiChatWithTutor,
   getStudentScore as apiGetStudentScore,
-} from "./api";
+} from './api';
 
-import logo from './logo.svg'; // Assuming logo exists
+// Guest Mode Data
+const GUEST_STUDENT = {
+  id: 'guest',
+  name: 'Guest Learner',
+  grade_band: 'Grade 8',
+  board: 'CBSE',
+  medium: 'en',
+  isGuest: true,
+};
 
+const INITIAL_GAME_STATE = {
+  coins: 100,
+  total_score: 0,
+  streak_days: 0,
+  quizzes_completed: 0,
+  current_level: 1,
+};
+
+// Welcome Screen Component (keep existing UI)
+const WelcomeScreen = ({ onLogin, onRegister, onGuestMode }) => {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  return (
+    <div style={{ ...styles.welcomeContainer, opacity: mounted ? 1 : 0 }}>
+      <div style={styles.welcomeBg} />
+      <div style={styles.welcomeContent}>
+        <div style={styles.welcomeLogo}><span style={styles.logoEmoji}>🎓</span></div>
+        <h1 style={styles.welcomeTitle}>AI Tutor</h1>
+        <p style={styles.welcomeSubtitle}>Your personal learning companion</p>
+        <div style={styles.welcomeButtons}>
+          <button style={styles.primaryButton} onClick={onLogin}>Sign In</button>
+          <button style={styles.secondaryButton} onClick={onRegister}>Create Account</button>
+          <button style={styles.guestButton} onClick={onGuestMode}>
+            <span style={styles.guestIcon}>👤</span>Continue as Guest
+          </button>
+        </div>
+        <p style={styles.guestInfo}>Guest mode lets you explore without an account.<br />Progress won't be saved.</p>
+      </div>
+    </div>
+  );
+};
+
+// Main App
 const App = () => {
   // Auth State
   const [currentStudent, setCurrentStudent] = useState(null);
-  const [authView, setAuthView] = useState('login'); // 'login' or 'register'
+  const [authView, setAuthView] = useState('welcome'); // welcome | login | register | parent
+  const [isGuest, setIsGuest] = useState(false);
 
   // Game State
-  const [gameState, setGameState] = useState({
-    coins: 100,
-    total_score: 0,
-    total_coins_earned: 100,
-    coin_board: [],
-    streak_days: 0,
-    quizzes_completed: 0,
-    videos_watched: 0,
-    current_level: 1,
-    unlocked_perks: [],
-    daily_progress: { videos: 0, quizzes: 0, study_time: 0 },
-    attention_score: 100,
-    parent_authenticated: false,
-  });
+  const [gameState, setGameState] = useState(INITIAL_GAME_STATE);
 
-  // App States
-  const [currentScreen, setCurrentScreen] = useState('welcome');
-  const [quizQuestions, setQuizQuestions] = useState([]);
-  const [quizAnswers, setQuizAnswers] = useState([]);
-  const [currentVideo, setCurrentVideo] = useState({});
-  const [userGrade, setUserGrade] = useState('');
-  const [userBoard, setUserBoard] = useState('');
-  const [userSubject, setUserSubject] = useState('');
-  const [userSubjectId, setUserSubjectId] = useState(null);
+  // Navigation State
   const [activeTab, setActiveTab] = useState('home');
-  const [chatHistory, setChatHistory] = useState([]);
-  const [chatMessage, setChatMessage] = useState('');
-  const [learningPlan, setLearningPlan] = useState('Click to generate your plan!');
-  const [attentionAlert, setAttentionAlert] = useState('');
-  const [socraticQuestion, setSocraticQuestion] = useState('');
-  const [videoTitle, setVideoTitle] = useState('');
-  const [videoUrl, setVideoUrl] = useState('');
-  const [videoError, setVideoError] = useState('');
-  const [quizIntro, setQuizIntro] = useState('');
-  const [quizContainerVisible, setQuizContainerVisible] = useState(false);
-  const [currentQuestion, setCurrentQuestion] = useState('');
-  const [answerOptions, setAnswerOptions] = useState(['', '', '', '']);
-  const [quizProgress, setQuizProgress] = useState('');
-  const [quizResults, setQuizResults] = useState(null);
-  const [perkResult, setPerkResult] = useState('');
-  const [parentPin, setParentPin] = useState('');
-  const [parentStatus, setParentStatus] = useState('');
-  const [selectionStatus, setSelectionStatus] = useState('');
-  const [videoCompletionMsg, setVideoCompletionMsg] = useState('');
-  const [attentionStatus, setAttentionStatus] = useState('');
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [subjects, setSubjects] = useState([]);
-  const [grades, setGrades] = useState([]);
+  const [subView, setSubView] = useState(null);
+
+  // Selection State
+  const [selectedBoard, setSelectedBoard] = useState(null);
+  const [selectedGrade, setSelectedGrade] = useState(null);
+  const [selectedSubject, setSelectedSubject] = useState(null);
+  const [selectedChapter, setSelectedChapter] = useState(null);
+
+  // Data State
   const [boards, setBoards] = useState([]);
-  const [languages, setLanguages] = useState([]);
-  const [userLanguage, setUserLanguage] = useState('');
+  const [grades, setGrades] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [flashcards, setFlashcards] = useState([]);
+  const [recentChapters, setRecentChapters] = useState([]);
 
-  const {
-    fetchChaptersFromDB,
-    dbChapters,
-    selectedDbChapter,
-    setSelectedDbChapter,
-    fetchSubchaptersFromDB,
-    dbSubchapters,
-    selectedDbSubchapter,
-    setSelectedDbSubchapter,
-  } = useContext(SyllabusContext);
+  // Chat State
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
 
-  // Loading States
-  const [loading, setLoading] = useState({
-    roadmap: false,
-    chat: false,
-    quiz: false,
-    video: false,
-    parent: false,
-    perk: false,
-  });
+  // Review State
+  const [isReviewSession, setIsReviewSession] = useState(false);
+  const [isReviewComplete, setIsReviewComplete] = useState(false);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [sessionResults, setSessionResults] = useState({ again: 0, hard: 0, good: 0, easy: 0 });
 
-  // Compute theme based on student's grade
-  const currentThemeName = useMemo(() => {
-    return getThemeNameFromGrade(userGrade || currentStudent?.grade_band);
-  }, [userGrade, currentStudent?.grade_band]);
+  // Syllabus Context
+  const { fetchChaptersFromDB, dbChapters, setSelectedDbChapter } = useContext(SyllabusContext);
 
-  const themedStyles = useMemo(() => {
-    return getThemedStyles(currentThemeName);
-  }, [currentThemeName]);
+  // Load fonts and CSS
+  useEffect(() => {
+    const link = document.createElement('link');
+    link.href = googleFontsUrl;
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
 
-  const currentTheme = useMemo(() => {
-    return getThemeFromGrade(userGrade || currentStudent?.grade_band);
-  }, [userGrade, currentStudent?.grade_band]);
+    const style = document.createElement('style');
+    style.id = 'design-system-vars';
+    style.textContent = generateCSSVariables();
+    document.head.appendChild(style);
 
-  // Front page data loader - fetch all dropdowns from database
+    return () => {
+      if (document.head.contains(link)) document.head.removeChild(link);
+      const existingStyle = document.getElementById('design-system-vars');
+      if (existingStyle) document.head.removeChild(existingStyle);
+    };
+  }, []);
+
+  // Deep link entry points (e.g., parent entry via WhatsApp link)
+  useEffect(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('entry') === 'parent') {
+        setAuthView('parent');
+      }
+    } catch (err) {
+      // ignore
+    }
+  }, []);
+
+  // Load dropdown data
   useEffect(() => {
     const loadDropdowns = async () => {
       try {
-        const [subjectsRes, gradesRes, boardsRes, languagesRes] = await Promise.all([
-          fetchSubjects(),
-          fetchGrades(),
-          fetchBoards(),
-          fetchLanguages(),
+        const [boardsRes, gradesRes, subjectsRes] = await Promise.all([
+          fetchBoards(), fetchGrades(), fetchSubjects()
         ]);
-
-        setSubjects(subjectsRes.data || []);
-        setGrades(gradesRes.data || []);
         setBoards(boardsRes.data || []);
-        setLanguages(languagesRes.data || []);
-
-        console.log('Loaded from DB - Subjects:', subjectsRes.data?.length, 'Grades:', gradesRes.data?.length, 'Boards:', boardsRes.data?.length, 'Languages:', languagesRes.data?.length);
+        setGrades(gradesRes.data || []);
+        setSubjects(subjectsRes.data || []);
       } catch (err) {
-        console.error("Failed loading dropdowns from database:", err);
+        console.error('Failed to load dropdown data:', err);
       }
     };
-
     loadDropdowns();
   }, []);
 
-  // Fetch score when student logs in
+  // Load student data
   useEffect(() => {
-    if (currentStudent) {
-      getStudentScore();
+    if (currentStudent && !currentStudent.isGuest) {
+      apiGetStudentScore(currentStudent.id).then(scoreData => {
+        if (scoreData) {
+          setGameState(prev => ({
+            ...prev,
+            coins: scoreData.coins || prev.coins,
+            total_score: scoreData.total_score || prev.total_score,
+            quizzes_completed: scoreData.quizzes_completed || prev.quizzes_completed,
+            streak_days: scoreData.streak_days || prev.streak_days,
+          }));
+        }
+      }).catch(console.error);
     }
   }, [currentStudent]);
 
+  // Load chapters when subject selected
   useEffect(() => {
-    if (!quizContainerVisible || !Array.isArray(quizQuestions) || quizQuestions.length === 0) {
-      setCurrentQuestion('');
-      setAnswerOptions([]);
-      return;
+    if (selectedSubject?.id) {
+      fetchChaptersFromDB(selectedSubject.id).catch(console.error);
     }
+  }, [selectedSubject, fetchChaptersFromDB]);
 
-    const safeIndex = Math.min(currentQuestionIndex, quizQuestions.length - 1);
-    const activeQuestion = quizQuestions[safeIndex] || {};
-    const questionNumber = safeIndex + 1;
-    const questionText = activeQuestion.question_text || activeQuestion.question || '';
-
-    let options = Array.isArray(activeQuestion.options) ? activeQuestion.options : [];
-    const questionType = (activeQuestion.type || activeQuestion.question_type || '').toString().toLowerCase();
-    if (questionType === 'true_false' || questionType === 'true/false') {
-      const normalized = options
-        .map((opt) => (typeof opt === 'string' ? opt.trim() : opt))
-        .filter((opt) => opt !== undefined && opt !== null && opt !== '');
-      options = normalized.slice(0, 2);
-
-      if (options.length < 2) {
-        options = ['True', 'False'];
-      }
-    }
-
-    setCurrentQuestion(`Question ${questionNumber}: ${questionText}`);
-    setAnswerOptions(options);
-  }, [quizContainerVisible, quizQuestions, currentQuestionIndex]);
-
-  // Sample Data
-  const SAMPLE_VIDEOS = {
-    Math: [
-      { title: 'Fun with Fractions! 🥧', duration: '15:30', url: 'https://www.youtube.com/embed/dQw4w9WgXcQ' },
-    ],
-  };
-
-  const PERKS_SHOP = [
-    { name: 'Golden Star Badge ⭐', cost: 50, description: 'Show everyone you\'re a star student!' },
-  ];
-
-  // Helper Functions
-  const addCoins = (amount, source = 'Reward') => {
-    if (!amount) return;
-    setGameState((prev) => {
-      const updatedCoins = prev.coins + amount;
-      const updatedTotal = prev.total_coins_earned + amount;
-      const updatedBoard = [
-        ...(prev.coin_board || []),
-        {
-          id: `${Date.now()}-${(prev.coin_board || []).length}`,
-          source,
-          amount,
-          total: updatedTotal,
-          timestamp: new Date().toISOString(),
-        },
-      ];
-      return {
-        ...prev,
-        coins: updatedCoins,
-        total_coins_earned: updatedTotal,
-        coin_board: updatedBoard,
-      };
-    });
-  };
-
-  const getCoinDisplay = () => `🏆 Score: ${gameState.total_score || 0}`;
-
-  const sanitizeVideoUrl = (rawUrl) => {
-    try {
-      if (!rawUrl) return null;
-      const parsed = new URL(rawUrl, window.location.origin);
-      const allowedHosts = ["www.youtube.com", "youtube.com", "youtu.be"];
-
-      if (parsed.protocol !== "https:") return null;
-
-      if (parsed.hostname === "youtu.be") {
-        const videoId = parsed.pathname.replace(/^\//, "");
-        return videoId ? `https://www.youtube.com/embed/${encodeURIComponent(videoId)}` : null;
-      }
-
-      if (!allowedHosts.includes(parsed.hostname)) return null;
-
-      if (parsed.pathname === "/watch") {
-        const watchId = parsed.searchParams.get("v");
-        return watchId ? `https://www.youtube.com/embed/${encodeURIComponent(watchId)}` : null;
-      }
-
-      if (parsed.pathname.startsWith("/embed/")) {
-        return `https://www.youtube.com${parsed.pathname}${parsed.search}`;
-      }
-
-      return null;
-    } catch (err) {
-      console.warn("Blocked invalid video URL", err);
-      return null;
-    }
-  };
-
-  // API Wrapper Functions
-  const verifyParentPin = async (pin) => {
-    await apiVerifyParentPin(pin, setLoading, setGameState, setParentStatus);
-  };
-
-  const logoutParent = async () => {
-    await apiLogoutParent(setGameState);
-  };
-
-  const getVideoForSubject = async (subject) => {
-    return await apiGetVideoForSubject(subject, setLoading, SAMPLE_VIDEOS);
-  };
-
-  const simulateAttentionCheck = async () => {
-    return await apiSimulateAttentionCheck(setGameState, setSocraticQuestion, setAttentionAlert);
-  };
-
-  const completeVideoWatching = async (subject) => {
-    await apiCompleteVideoWatching(subject, addCoins, setGameState, setVideoCompletionMsg);
-  };
-
-  const generateQuiz = async () => {
-    return await apiGenerateQuiz(
-      selectedDbChapter,
-      selectedDbSubchapter,
-      dbSubchapters,
-      userSubject,
-      userGrade,
-      setLoading,
-      currentStudent?.id
-    );
-  };
-
-  const calculateQuizScore = async (answers, questions, passedAddCoins, passedSetGameState, difficulty, chapterId, subjectId) => {
-    const result = await apiCalculateQuizScore(
-      answers,
-      questions,
-      addCoins,
-      setGameState,
-      difficulty,
-      chapterId,
-      subjectId,
-      currentStudent?.id // Use logged-in student ID
-    );
-    // Refresh score after quiz
-    getStudentScore();
-    return result;
-  };
-
-  const buyPerk = async (perkIndex) => {
-    await apiBuyPerk(perkIndex, PERKS_SHOP, setLoading, setGameState, setPerkResult);
-  };
-
-  const generateLearningRoadmap = async () => {
-    await apiGenerateLearningRoadmap(userGrade, userBoard, userSubject, setLoading, setLearningPlan);
-  };
-
-  const chatWithTutor = async (message) => {
-    await apiChatWithTutor(message, chatHistory, userSubject, userGrade, setLoading, setChatHistory, setChatMessage);
-  };
-
-  const getStudentScore = async () => {
-    if (!currentStudent) return;
-    const scoreData = await apiGetStudentScore(currentStudent.id);
-    if (scoreData) {
-      setGameState(prev => ({ ...prev, total_score: scoreData.total_score }));
-    }
-  };
-
-  // Event Handlers
-  const switchToSelection = () => setCurrentScreen('selection');
-
-  const handleParentLogin = async () => {
-    await verifyParentPin(parentPin);
-  };
-
-  const handleSubjectChange = (event) => {
-    const subjectId = event.target.value || null;
-    setUserSubjectId(subjectId);
-
-    const selected = subjects.find(
-      (subject) => String(subject.id) === String(subjectId)
-    );
-    setUserSubject(selected?.name || "");
-  };
-
-  const setupLearning = async () => {
-    if (!userGrade || !userBoard || !userSubjectId || !userSubject) {
-      setSelectionStatus("❌ Please select all options!");
-      return;
-    }
-
-    try {
-      await fetchChaptersFromDB(userSubjectId);
-      setCurrentScreen("selectChapter");
-    } catch (error) {
-      console.error("Setup error:", error);
-      setSelectionStatus("❌ Something went wrong while setting up learning.");
-    }
-  };
-
-  const handleChapterContinue = async () => {
-    if (!selectedDbChapter) return;
-    try {
-      await fetchSubchaptersFromDB(selectedDbChapter);
-      setCurrentScreen("selectSubchapter");
-    } catch (error) {
-      console.error("Subchapter fetch error:", error);
-      setSelectionStatus("❌ Could not load subchapters.");
-    }
-  };
-
-  const loadVideoForSubject = async () => {
-    setVideoError("");
-    const video = await getVideoForSubject(userSubject);
-    const safeUrl = sanitizeVideoUrl(video?.url);
-
-    if (!safeUrl) {
-      console.warn("Unsafe video URL blocked", video?.url);
-      setVideoTitle("Unable to load video");
-      setVideoUrl("");
-      setCurrentVideo({});
-      setVideoError("Cannot load video: unsupported or unsafe video URL received.");
-      return;
-    }
-
-    setVideoTitle(`Now Playing: ${video.title}`);
-    setVideoUrl(safeUrl);
-    setCurrentVideo({ ...video, url: safeUrl });
-  };
-
-  const checkAttention = async () => {
-    const needsCheck = await simulateAttentionCheck();
-    if (needsCheck) {
-      setAttentionStatus('⚠️ Pay attention!');
-    } else {
-      setAttentionStatus('✅ Excellent focus!');
-      setAttentionAlert('');
-      setSocraticQuestion('');
-    }
-  };
-
-  const handleSocraticAnswer = (answer) => {
-    if (answer) {
-      setAttentionAlert('');
-      setSocraticQuestion('');
-      setAttentionStatus('👏 Great answer!');
-    }
-  };
-
-  const startQuizSession = async () => {
-    if (!selectedDbSubchapter) {
-      console.warn("No subchapter selected for quiz.");
-      return null;
-    }
-    const data = await generateQuiz();
-    const basicQuestions = data?.basic || [];
-    setQuizQuestions(basicQuestions);
-    setQuizAnswers(new Array(basicQuestions.length).fill(-1));
-    setQuizContainerVisible(true);
-    setCurrentQuestionIndex(0);
-    setQuizProgress(`Progress: 0/${basicQuestions.length}`);
-    return data;
-  }
-;
-  const handleQuizAnswer = (answerIndex) => {
-    const newAnswers = [...quizAnswers];
-    newAnswers[currentQuestionIndex] = answerIndex;
-    setQuizAnswers(newAnswers);
-  };
-
-  const handleNextQuestion = () => {
-    if (currentQuestionIndex < quizQuestions.length - 1) {
-      const nextIndex = currentQuestionIndex + 1;
-      setCurrentQuestionIndex(nextIndex);
-      setQuizProgress(`Progress: ${nextIndex + 1}/${quizQuestions.length}`);
-    }
-  };
-
-  const submitQuizFinal = async () => {
-    const result = await calculateQuizScore(quizAnswers, quizQuestions);
-    setQuizResults(result);
-    setQuizContainerVisible(false);
-  };
-
-  // --- Auth Handlers ---
+  // Auth Handlers
   const handleLoginSuccess = (student) => {
     setCurrentStudent(student);
-    setUserGrade(student.grade_band);
-    setUserBoard(student.board || 'CBSE');
-    setUserLanguage(student.medium || 'en');  // Pre-fill language from registration
-    setCurrentScreen('selection');
+    setIsGuest(false);
+    setAuthView('welcome');
+    setActiveTab('home');
   };
 
   const handleRegisterSuccess = () => {
     setAuthView('login');
-    alert('Registration successful! Please login.');
+  };
+
+  const handleGuestMode = () => {
+    setCurrentStudent(GUEST_STUDENT);
+    setIsGuest(true);
+    setActiveTab('home');
   };
 
   const handleLogout = () => {
     setCurrentStudent(null);
-    setAuthView('login');
-    setCurrentScreen('welcome');
+    setIsGuest(false);
+    setAuthView('welcome');
     setActiveTab('home');
+    setSubView(null);
+    setSelectedBoard(null);
+    setSelectedGrade(null);
+    setSelectedSubject(null);
+    setSelectedChapter(null);
+    setFlashcards([]);
+    setRecentChapters([]);
+    setChatMessages([]);
+    setGameState(INITIAL_GAME_STATE);
   };
 
-  // --- Render Auth Views if not logged in ---
+  // Navigation Handlers
+  const handleTabChange = (tab) => {
+    setActiveTab(tab);
+    setSubView(null);
+    if (tab !== 'review') {
+      setIsReviewSession(false);
+      setIsReviewComplete(false);
+      setCurrentCardIndex(0);
+      setSessionResults({ again: 0, hard: 0, good: 0, easy: 0 });
+    }
+  };
+
+  const openChapter = (chapter) => {
+    setSelectedChapter(chapter);
+    setSelectedDbChapter(chapter.id);
+    setSubView('chapter');
+    setRecentChapters(prev => {
+      const filtered = prev.filter(r => r.chapterId !== chapter.id);
+      return [{ chapter: chapter.name, subject: selectedSubject?.name, lastAccessed: new Date(), chapterId: chapter.id }, ...filtered].slice(0, 10);
+    });
+  };
+
+  // Chat Handler
+  const handleSendMessage = async (message) => {
+    if (!message.trim()) return;
+    setChatMessages(prev => [...prev, { role: 'user', content: message }]);
+    setChatLoading(true);
+    try {
+      const gradeForChat = selectedGrade?.name || currentStudent?.grade_band || '10th';
+      const response = await apiChatWithTutor(
+        message,
+        selectedSubject?.name || 'General',
+        gradeForChat,
+        currentStudent?.id
+      );
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: response.response || response.message || 'I couldn\'t generate a response.',
+        citations: response.citations || [],
+      }]);
+    } catch (err) {
+      setChatMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, I encountered an error.' }]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  // Review Handlers
+  const handleStartReview = () => {
+    setIsReviewSession(true);
+    setCurrentCardIndex(0);
+    setSessionResults({ again: 0, hard: 0, good: 0, easy: 0 });
+  };
+
+  const handleGradeCard = (grade) => {
+    setSessionResults(prev => ({ ...prev, [grade]: prev[grade] + 1 }));
+    const dueCards = flashcards.filter(f => new Date(f.due_date || f.next_review) <= new Date());
+    if (currentCardIndex < dueCards.length - 1) {
+      setCurrentCardIndex(prev => prev + 1);
+    } else {
+      setIsReviewComplete(true);
+    }
+  };
+
+  // Computed Values
+  const dueFlashcards = useMemo(() => flashcards.filter(f => new Date(f.due_date || f.next_review) <= new Date()), [flashcards]);
+  const mistakeCards = useMemo(() => flashcards.filter(f => f.mistake_count > 0 || f.ease_factor < 2.0), [flashcards]);
+
+  const getContext = () => {
+    if (!selectedBoard) return null;
+    return { board: selectedBoard?.name, grade: selectedGrade?.name, subject: selectedSubject?.name, chapter: selectedChapter?.name };
+  };
+
+  const getParentEntryLink = () => {
+    try {
+      const url = new URL(window.location.origin);
+      url.searchParams.set('entry', 'parent');
+      return url.toString();
+    } catch (err) {
+      return '/?entry=parent';
+    }
+  };
+
+  const openWhatsAppParentInvite = () => {
+    const link = getParentEntryLink();
+    const studentName = currentStudent?.name || 'Student';
+    const text = `AI Tutor · Parent entry link for ${studentName}:\n${link}\n\nOpen the link and verify with PIN or OTP to view the parent dashboard.`;
+    const waUrl = `https://wa.me/?text=${encodeURIComponent(text)}`;
+    window.open(waUrl, '_blank', 'noopener,noreferrer');
+  };
+
+  // Render Views
+  const renderView = () => {
+    if (subView === 'chapter') {
+      return (
+        <ChapterPageView
+          chapter={selectedChapter}
+          subject={selectedSubject}
+          progress={35}
+          onBack={() => setSubView(null)}
+          onMenuClick={() => {}}
+          onModeStart={(mode) => {
+            if (mode === 'study') { setChatMessages([]); setSubView('study'); }
+          }}
+          onSuggestionSelect={(s) => { setChatMessages([]); handleSendMessage(s.prompt || s.label); setSubView('study'); }}
+        />
+      );
+    }
+
+    if (subView === 'study') {
+      return (
+        <StudyTogetherView
+          chapter={selectedChapter}
+          subject={selectedSubject}
+          messages={chatMessages}
+          isLoading={chatLoading}
+          onSendMessage={handleSendMessage}
+          onSaveToFlashcard={(msg) => console.log('Save:', msg)}
+          onFollowUp={(msg) => handleSendMessage(`Tell me more about: ${msg.content.slice(0, 50)}...`)}
+          onExpand={(msg) => handleSendMessage(`Explain in more detail: ${msg.content.slice(0, 50)}...`)}
+          onSwitchChapter={() => { setSubView(null); handleTabChange('learn'); }}
+          onStayInChapter={() => {}}
+        />
+      );
+    }
+
+    switch (activeTab) {
+      case 'home':
+        return (
+          <NewDashboardView
+            student={currentStudent}
+            gameState={gameState}
+            lastChapter={recentChapters[0]?.chapter}
+            lastMode="study"
+            lastProgress={65}
+            dueFlashcards={dueFlashcards.length}
+            recentChapters={recentChapters}
+            onContinueLearning={() => recentChapters[0] ? openChapter({ id: recentChapters[0].chapterId, name: recentChapters[0].chapter }) : handleTabChange('learn')}
+            onStartReview={() => handleTabChange('review')}
+            onPickChapter={() => handleTabChange('learn')}
+            onStudyTogether={() => selectedChapter ? (setChatMessages([]), setSubView('study')) : handleTabChange('learn')}
+            onRecentChapterClick={(item) => openChapter({ id: item.chapterId, name: item.chapter })}
+          />
+        );
+
+      case 'learn':
+        if (selectedChapter && !subView) {
+          return (
+            <ChapterPageView
+              chapter={selectedChapter}
+              subject={selectedSubject}
+              progress={0}
+              onBack={() => setSelectedChapter(null)}
+              onMenuClick={() => {}}
+              onModeStart={(mode) => { if (mode === 'study') { setChatMessages([]); setSubView('study'); } }}
+              onSuggestionSelect={(s) => { setChatMessages([]); handleSendMessage(s.prompt || s.label); setSubView('study'); }}
+            />
+          );
+        }
+        return (
+          <LearnView
+            boards={boards}
+            grades={grades}
+            subjects={subjects}
+            chapters={dbChapters || []}
+            recentChapters={recentChapters}
+            selectedBoard={selectedBoard}
+            selectedGrade={selectedGrade}
+            selectedSubject={selectedSubject}
+            selectedChapter={selectedChapter}
+            onBoardSelect={setSelectedBoard}
+            onGradeSelect={setSelectedGrade}
+            onSubjectSelect={setSelectedSubject}
+            onChapterSelect={setSelectedChapter}
+            onOpenChapter={openChapter}
+          />
+        );
+
+      case 'review':
+        return (
+          <ReviewView
+            dueToday={dueFlashcards.length}
+            mistakeCards={mistakeCards.length}
+            chapterCards={flashcards.length - mistakeCards.length}
+            flashcards={dueFlashcards}
+            streakDays={gameState.streak_days}
+            isSessionActive={isReviewSession}
+            isSessionComplete={isReviewComplete}
+            currentCardIndex={currentCardIndex}
+            sessionResults={sessionResults}
+            onStartReview={handleStartReview}
+            onStartMistakes={handleStartReview}
+            onGrade={handleGradeCard}
+            onDone={() => { setIsReviewSession(false); setIsReviewComplete(false); setCurrentCardIndex(0); setSessionResults({ again: 0, hard: 0, good: 0, easy: 0 }); }}
+            onStudyMore={() => handleTabChange('learn')}
+          />
+        );
+
+      case 'profile':
+        return (
+          <ProfileView
+            student={currentStudent}
+            stats={{ level: gameState.current_level, streakDays: gameState.streak_days, totalCards: flashcards.length, coins: gameState.coins }}
+            settings={{ language: currentStudent?.medium || 'en', autoSaveCards: true, weeklySummary: true }}
+            isParentLinked={false}
+            onLanguageChange={() => {}}
+            onBoardGradeChange={() => handleTabChange('learn')}
+            onAutoSaveToggle={() => {}}
+            onWeeklySummaryToggle={() => {}}
+            onAddParent={openWhatsAppParentInvite}
+            onManageParentSettings={() => window.open(getParentEntryLink(), '_blank', 'noopener,noreferrer')}
+            onDownloadData={() => {}}
+            onDeleteData={() => {}}
+            onLogout={handleLogout}
+          />
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  const setEntryParam = (value) => {
+    try {
+      const url = new URL(window.location.href);
+      if (!value) {
+        url.searchParams.delete('entry');
+      } else {
+        url.searchParams.set('entry', value);
+      }
+      window.history.replaceState({}, '', url.toString());
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  // Auth Screens
   if (!currentStudent) {
-    // Default to 'teen' theme for auth pages if no grade is known
-    const defaultThemeStyles = getThemedStyles('teen');
+    if (authView === 'parent') {
+      return (
+        <ThemeProvider gradeBand="Grade 9">
+          <ParentEntryView
+            theme="teen"
+            onBack={() => {
+              setAuthView('welcome');
+              setEntryParam(null);
+            }}
+          />
+        </ThemeProvider>
+      );
+    }
+
+    if (authView === 'login') {
+      return (
+        <ThemeProvider gradeBand="Grade 9">
+          <div style={styles.authContainer}>
+            <LoginView
+              onLoginSuccess={handleLoginSuccess}
+              onNavigateToRegister={() => setAuthView('register')}
+            />
+            <button style={styles.backToWelcome} onClick={() => setAuthView('welcome')}>← Back</button>
+          </div>
+        </ThemeProvider>
+      );
+    }
+
+    if (authView === 'register') {
+      return (
+        <ThemeProvider gradeBand="Grade 9">
+          <div style={styles.authContainer}>
+            <RegisterView
+              onRegisterSuccess={handleRegisterSuccess}
+              onNavigateToLogin={() => setAuthView('login')}
+            />
+            <button style={styles.backToWelcome} onClick={() => setAuthView('welcome')}>← Back</button>
+          </div>
+        </ThemeProvider>
+      );
+    }
 
     return (
-      <ThemeProvider gradeBand="Grade 9"> {/* Force teen theme */}
-        <style>{defaultThemeStyles}</style>
-        <AnimatedBackground theme="teen" />
-        {authView === 'login' ? (
-          <LoginView onLoginSuccess={handleLoginSuccess} onNavigateToRegister={() => setAuthView('register')} />
-        ) : (
-          <RegisterView onRegisterSuccess={handleRegisterSuccess} onNavigateToLogin={() => setAuthView('login')} />
-        )}
-      </ThemeProvider>
+      <WelcomeScreen
+        onLogin={() => setAuthView('login')}
+        onRegister={() => setAuthView('register')}
+        onGuestMode={handleGuestMode}
+      />
     );
   }
 
-  // Render Main App with Theme
+  // Main App
   return (
-    <ThemeProvider gradeBand={userGrade || currentStudent?.grade_band}>
-      <div className={`container fade-in theme-${currentThemeName}`}>
-        <style>{themedStyles}</style>
-
-        {/* Theme-aware Header with Logout */}
-        <header style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          padding: currentThemeName === 'kids' ? '15px 25px' : '10px 20px',
-          background: currentTheme.colors.headerBg,
-          color: currentTheme.colors.textOnPrimary,
-          alignItems: 'center',
-          marginBottom: '20px',
-          borderRadius: currentTheme.borderRadius.medium,
-          boxShadow: currentTheme.shadows.card,
-          transition: 'all 0.3s ease'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <img src={logo} alt="Logo" style={{
-              height: currentThemeName === 'kids' ? '40px' : '30px',
-              filter: currentThemeName === 'kids' ? 'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' : 'none'
-            }} />
-            <div>
-              <span style={{
-                fontFamily: currentTheme.fonts.primary,
-                fontSize: currentThemeName === 'kids' ? '18px' : '16px',
-                fontWeight: '600'
-              }}>
-                {currentThemeName === 'kids' ? '🎉 ' : ''}
-                Welcome, {currentStudent.name}!
-              </span>
-              <span style={{
-                marginLeft: '10px',
-                padding: '4px 12px',
-                background: 'rgba(255,255,255,0.2)',
-                borderRadius: currentTheme.borderRadius.pill,
-                fontSize: currentThemeName === 'kids' ? '14px' : '12px'
-              }}>
-                {currentTheme.icons.star} {currentStudent.grade_band}
-              </span>
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {/* Theme indicator */}
-            <span style={{
-              fontSize: '12px',
-              opacity: 0.8,
-              padding: '4px 10px',
-              background: 'rgba(255,255,255,0.1)',
-              borderRadius: currentTheme.borderRadius.small
-            }}>
-              {currentTheme.displayName}
-            </span>
-            <button
-              onClick={handleLogout}
-              style={{
-                background: currentTheme.colors.danger,
-                border: 'none',
-                padding: currentThemeName === 'kids' ? '8px 16px' : '6px 12px',
-                color: 'white',
-                borderRadius: currentTheme.borderRadius.small,
-                cursor: 'pointer',
-                fontFamily: currentTheme.fonts.primary,
-                fontWeight: '600',
-                fontSize: currentThemeName === 'kids' ? '14px' : '13px',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {currentThemeName === 'kids' ? '👋 Bye!' : 'Logout'}
+    <ThemeProvider gradeBand={currentStudent?.grade_band || 'Grade 8'}>
+      <MainLayout
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        context={getContext()}
+        reviewDueCount={dueFlashcards.length}
+        showContextPill={!!getContext() && activeTab !== 'home' && activeTab !== 'profile'}
+      >
+        {isGuest && (
+          <div style={styles.guestBanner}>
+            <span>👤 Guest Mode - </span>
+            <button style={styles.guestBannerLink} onClick={() => { setCurrentStudent(null); setAuthView('register'); }}>
+              Create account to save progress
             </button>
           </div>
-        </header>
-
-        {currentScreen === 'welcome' && (
-          <WelcomeView
-            switchToSelection={switchToSelection}
-            parentPin={parentPin}
-            setParentPin={setParentPin}
-            handleParentLogin={handleParentLogin}
-            loading={loading}
-            parentStatus={parentStatus}
-          />
         )}
-
-        {currentScreen === 'selection' && (
-          <SelectionView
-            userGrade={userGrade}
-            setUserGrade={setUserGrade}
-            userBoard={userBoard}
-            setUserBoard={setUserBoard}
-            userLanguage={userLanguage}
-            setUserLanguage={setUserLanguage}
-            userSubjectId={userSubjectId}
-            handleSubjectChange={handleSubjectChange}
-            subjects={subjects}
-            grades={grades}
-            boards={boards}
-            languages={languages}
-            setupLearning={setupLearning}
-            selectionStatus={selectionStatus}
-            theme={currentThemeName}
-            currentStudent={currentStudent}
-          />
-        )}
-
-        {currentScreen === "selectChapter" && (
-          <ChapterSelectionView
-            selectedDbChapter={selectedDbChapter}
-            setSelectedDbChapter={setSelectedDbChapter}
-            dbChapters={dbChapters}
-            goToSubchapter={handleChapterContinue}
-            theme={currentThemeName}
-          />
-        )}
-
-        {currentScreen === "selectSubchapter" && (
-          <SubchapterSelectionView
-            selectedDbSubchapter={selectedDbSubchapter}
-            setSelectedDbSubchapter={setSelectedDbSubchapter}
-            dbSubchapters={dbSubchapters}
-            onContinue={() => setCurrentScreen("main")}
-            theme={currentThemeName}
-          />
-        )}
-
-        {currentScreen === 'main' && (
-          <div>
-            <div className="header-section">
-              <div className="coin-display">{getCoinDisplay()}</div>
-              <button className="warning-button" onClick={() => setCurrentScreen('welcome')}>
-                🏠 Back to Home
-              </button>
-            </div>
-            <div className="tab-container">
-              <button className={`tab-nav ${activeTab === 'home' ? 'active' : ''}`} onClick={() => setActiveTab('home')}>
-                🏠 Dashboard
-              </button>
-              <button className={`tab-nav ${activeTab === 'video' ? 'active' : ''}`} onClick={() => setActiveTab('video')}>
-                📺 Watch & Learn
-              </button>
-              <button className={`tab-nav ${activeTab === 'quiz' ? 'active' : ''}`} onClick={() => setActiveTab('quiz')}>
-                🎯 Quiz Time
-              </button>
-              <button className={`tab-nav ${activeTab === 'rewards' ? 'active' : ''}`} onClick={() => setActiveTab('rewards')}>
-                🏆 Rewards & Shop
-              </button>
-              <button className={`tab-nav ${activeTab === 'chat' ? 'active' : ''}`} onClick={() => setActiveTab('chat')}>
-                💬 AI Tutor Chat
-              </button>
-              <button className={`tab-nav ${activeTab === 'parent' ? 'active' : ''}`} onClick={() => setActiveTab('parent')}>
-                👨‍👩‍👧‍👦 Parent Zone
-              </button>
-              <button className={`tab-nav ${activeTab === 'flashcards' ? 'active' : ''}`} onClick={() => setActiveTab('flashcards')}>
-                🃏 Flashcards
-              </button>
-            </div>
-
-            {activeTab === 'home' && (
-              <DashboardView
-                gameState={gameState}
-                generateLearningRoadmap={generateLearningRoadmap}
-                loading={loading}
-                learningPlan={learningPlan}
-                theme={currentThemeName}
-              />
-            )}
-
-            {activeTab === 'video' && (
-              <VideoView
-                videoTitle={videoTitle}
-                videoUrl={videoUrl}
-                videoError={videoError}
-                userSubject={userSubject}
-                loadVideoForSubject={loadVideoForSubject}
-                loading={loading}
-                completeVideoWatching={completeVideoWatching}
-                videoCompletionMsg={videoCompletionMsg}
-                checkAttention={checkAttention}
-                attentionStatus={attentionStatus}
-                attentionAlert={attentionAlert}
-                socraticQuestion={socraticQuestion}
-                handleSocraticAnswer={handleSocraticAnswer}
-              />
-            )}
-
-            {activeTab === 'quiz' && (
-              <QuizView
-                userSubject={userSubject}
-                startQuizSession={startQuizSession}
-                loading={loading}
-                quizContainerVisible={quizContainerVisible}
-                currentQuestion={currentQuestion}
-                answerOptions={answerOptions}
-                quizAnswers={quizAnswers}
-                currentQuestionIndex={currentQuestionIndex}
-                handleQuizAnswer={handleQuizAnswer}
-                quizProgress={quizProgress}
-                quizQuestions={quizQuestions}
-                submitQuizFinal={submitQuizFinal}
-                quizResults={quizResults}
-                handleNextQuestion={handleNextQuestion}
-                userSubjectId={userSubjectId}
-                selectedDbChapter={selectedDbChapter}
-                calculateQuizScore={calculateQuizScore}
-                addCoins={addCoins}
-                setGameState={setGameState}
-                theme={currentThemeName}
-              />
-            )}
-
-            {activeTab === 'flashcards' && (
-              <FlashcardView
-                studentId={currentStudent?.id}
-                chapterId={selectedDbChapter}
-                theme={currentThemeName}
-              />
-            )}
-
-            {activeTab === 'rewards' && (
-              <RewardsView
-                gameState={gameState}
-                PERKS_SHOP={PERKS_SHOP}
-                buyPerk={buyPerk}
-                loading={loading}
-                perkResult={perkResult}
-                theme={currentThemeName}
-              />
-            )}
-
-
-            {activeTab === 'chat' && (
-              <ChatView
-                userSubject={userSubject}
-                chatHistory={chatHistory}
-                chatMessage={chatMessage}
-                setChatMessage={setChatMessage}
-                chatWithTutor={chatWithTutor}
-                loading={loading}
-                setChatHistory={setChatHistory}
-                theme={currentThemeName}
-              />
-            )}
-
-
-            {activeTab === 'parent' && (
-              <ParentView
-                gameState={gameState}
-                userGrade={userGrade}
-                userBoard={userBoard}
-                userSubject={userSubject}
-                logoutParent={logoutParent}
-              />
-            )}
-          </div>
-        )}
-      </div>
+        {renderView()}
+      </MainLayout>
     </ThemeProvider>
   );
+};
+
+// Styles
+const styles = {
+  welcomeContainer: {
+    minHeight: '100vh',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.neutral[50],
+    position: 'relative',
+    overflow: 'hidden',
+    transition: 'opacity 0.5s ease-out',
+  },
+  welcomeBg: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0, bottom: 0,
+    backgroundImage: `radial-gradient(circle at 20% 80%, ${colors.primary[100]} 0%, transparent 50%), radial-gradient(circle at 80% 20%, ${colors.accent[100]} 0%, transparent 50%), radial-gradient(circle at 50% 50%, ${colors.secondary[50]} 0%, transparent 60%)`,
+    opacity: 0.8,
+  },
+  welcomeContent: {
+    position: 'relative',
+    zIndex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: spacing[8],
+    maxWidth: '400px',
+    width: '100%',
+  },
+  welcomeLogo: {
+    width: '100px',
+    height: '100px',
+    borderRadius: '28px',
+    backgroundColor: colors.primary[500],
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: spacing[6],
+    boxShadow: `0 20px 40px ${colors.primary[500]}40`,
+  },
+  logoEmoji: { fontSize: '48px' },
+  welcomeTitle: {
+    fontFamily: typography.fontFamily.display,
+    fontSize: '2.5rem',
+    fontWeight: typography.fontWeight.bold,
+    color: colors.neutral[900],
+    margin: 0,
+  },
+  welcomeSubtitle: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.lg[0],
+    color: colors.neutral[500],
+    margin: `${spacing[2]} 0 ${spacing[8]} 0`,
+  },
+  welcomeButtons: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: spacing[3],
+    width: '100%',
+  },
+  primaryButton: {
+    width: '100%',
+    padding: `${spacing[4]} ${spacing[6]}`,
+    backgroundColor: colors.primary[500],
+    color: colors.neutral[0],
+    border: 'none',
+    borderRadius: '16px',
+    fontFamily: typography.fontFamily.display,
+    fontSize: typography.fontSize.base[0],
+    fontWeight: typography.fontWeight.semibold,
+    cursor: 'pointer',
+    boxShadow: `0 4px 14px ${colors.primary[500]}30`,
+  },
+  secondaryButton: {
+    width: '100%',
+    padding: `${spacing[4]} ${spacing[6]}`,
+    backgroundColor: colors.neutral[0],
+    color: colors.neutral[800],
+    border: `2px solid ${colors.neutral[200]}`,
+    borderRadius: '16px',
+    fontFamily: typography.fontFamily.display,
+    fontSize: typography.fontSize.base[0],
+    fontWeight: typography.fontWeight.semibold,
+    cursor: 'pointer',
+  },
+  guestButton: {
+    width: '100%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[2],
+    padding: `${spacing[4]} ${spacing[6]}`,
+    backgroundColor: colors.accent[400],
+    color: colors.neutral[900],
+    border: `2px solid ${colors.neutral[900]}`,
+    borderRadius: '16px',
+    fontFamily: typography.fontFamily.display,
+    fontSize: typography.fontSize.base[0],
+    fontWeight: typography.fontWeight.bold,
+    cursor: 'pointer',
+    boxShadow: '4px 4px 0 0 rgba(26, 26, 26, 1)',
+  },
+  guestIcon: { fontSize: '1.25rem' },
+  guestInfo: {
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm[0],
+    color: colors.neutral[400],
+    textAlign: 'center',
+    marginTop: spacing[6],
+    lineHeight: 1.6,
+  },
+  authContainer: { position: 'relative', minHeight: '100vh' },
+  backToWelcome: {
+    position: 'fixed',
+    top: spacing[4],
+    left: spacing[4],
+    padding: `${spacing[2]} ${spacing[4]}`,
+    backgroundColor: colors.neutral[0],
+    color: colors.neutral[700],
+    border: `1px solid ${colors.neutral[200]}`,
+    borderRadius: '12px',
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm[0],
+    cursor: 'pointer',
+    zIndex: 100,
+  },
+  guestBanner: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing[1],
+    backgroundColor: colors.accent[100],
+    padding: `${spacing[2]} ${spacing[4]}`,
+    borderRadius: '12px',
+    marginBottom: spacing[4],
+    fontFamily: typography.fontFamily.body,
+    fontSize: typography.fontSize.sm[0],
+    color: colors.neutral[800],
+  },
+  guestBannerLink: {
+    backgroundColor: 'transparent',
+    border: 'none',
+    color: colors.primary[600],
+    fontWeight: typography.fontWeight.semibold,
+    cursor: 'pointer',
+    textDecoration: 'underline',
+  },
 };
 
 export default App;

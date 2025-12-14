@@ -241,42 +241,81 @@ export const generateLearningRoadmap = async (userGrade, userBoard, userSubject,
   }
 };
 
-export const chatWithTutor = async (message, chatHistory, userSubject, userGrade, setLoading, setChatHistory, setChatMessage) => {
-  if (!message.trim()) return;
+export const chatWithTutor = async (...args) => {
+  /**
+   * Supports two call styles:
+   * 1) New (returns response): chatWithTutor(message, subject, grade, studentId?)
+   * 2) Legacy (stateful): chatWithTutor(message, chatHistory, userSubject, userGrade, setLoading, setChatHistory, setChatMessage)
+   */
+  const isLegacy =
+    Array.isArray(args[1]) &&
+    typeof args[4] === 'function' &&
+    typeof args[5] === 'function' &&
+    typeof args[6] === 'function';
 
-  setLoading(prev => ({ ...prev, chat: true }));
+  if (isLegacy) {
+    const [message, chatHistory, userSubject, userGrade, setLoading, setChatHistory, setChatMessage] = args;
+    if (!message?.trim()) return null;
 
-  // Add user message immediately
-  const newChatHistory = [...chatHistory, { role: 'user', content: message }];
-  setChatHistory(newChatHistory);
-  setChatMessage('');
+    setLoading((prev) => ({ ...prev, chat: true }));
+
+    const newChatHistory = [...chatHistory, { role: 'user', content: message }];
+    setChatHistory(newChatHistory);
+    setChatMessage('');
+
+    try {
+      const response = await api.post('/chat_with_tutor', {
+        message,
+        subject: userSubject || 'General',
+        grade: userGrade || '10th',
+      });
+
+      const botResponse = response.data?.response || 'Sorry, I didn\'t get a response from the AI.';
+      setChatHistory([...newChatHistory, { role: 'assistant', content: botResponse }]);
+      return response.data;
+    } catch (error) {
+      console.error('Chat error:', error);
+      let errorMessage = '❌ Sorry, I\'m having trouble connecting right now.';
+
+      if (error.response?.status === 403) {
+        errorMessage = '❌ API Authentication failed. Please check your EURIAI API key.';
+      } else if (error.response?.status === 503) {
+        errorMessage = '❌ AI Tutor service is currently unavailable. Please try again later.';
+      } else if (!error.response) {
+        errorMessage = '❌ Cannot connect to backend. Please make sure the backend is running.';
+      }
+
+      setChatHistory([...newChatHistory, { role: 'assistant', content: errorMessage }]);
+      return { response: errorMessage };
+    } finally {
+      setLoading((prev) => ({ ...prev, chat: false }));
+    }
+  }
+
+  const [message, subject, grade, studentId] = args;
+  if (!message?.trim()) return { response: '' };
 
   try {
     const response = await api.post('/chat_with_tutor', {
       message,
-      subject: userSubject || 'General',
-      grade: userGrade || '10th'
+      subject: subject || 'General',
+      grade: grade || '10th',
+      student_id: studentId,
     });
-
-    const botResponse = response.data?.response || 'Sorry, I didn\'t get a response from the AI.';
-    setChatHistory([...newChatHistory, { role: 'assistant', content: botResponse }]);
+    return response.data;
   } catch (error) {
     console.error('Chat error:', error);
-    let errorMessage = '❌ Sorry, I\'m having trouble connecting right now.';
 
+    let errorMessage = 'Sorry, I\'m having trouble connecting right now.';
     if (error.response?.status === 403) {
-      errorMessage = '❌ API Authentication failed. Please check your EURIAI API key.';
+      errorMessage = 'API Authentication failed. Please check your EURIAI API key.';
     } else if (error.response?.status === 503) {
-      errorMessage = '❌ AI Tutor service is currently unavailable. Please try again later.';
+      errorMessage = 'AI Tutor service is currently unavailable. Please try again later.';
     } else if (!error.response) {
-      errorMessage = '❌ Cannot connect to backend. Please make sure the backend is running.';
+      errorMessage = 'Cannot connect to backend. Please make sure the backend is running.';
     }
 
-    setChatHistory([...newChatHistory, {
-      role: 'assistant',
-      content: errorMessage
-    }]);
-    return null;
+    return { response: `❌ ${errorMessage}` };
   }
 };
 
@@ -308,5 +347,79 @@ export const loginStudent = async (credentials) => {
   } catch (error) {
     console.error('Login error:', error);
     return { success: false, message: error.response?.data?.detail || 'Login failed' };
+  }
+};
+
+export const requestOtp = async ({ channel, identifier, purpose }) => {
+  try {
+    const response = await api.post('/students/otp/request', { channel, identifier, purpose });
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Request OTP error:', error);
+    return { success: false, message: error.response?.data?.detail || 'Failed to send OTP' };
+  }
+};
+
+export const verifyOtp = async ({ channel, identifier, purpose, otp }) => {
+  try {
+    const response = await api.post('/students/otp/verify', { channel, identifier, purpose, otp });
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    return { success: false, message: error.response?.data?.detail || 'Invalid OTP' };
+  }
+};
+
+export const loginStudentOtp = async ({ phone, otp }) => {
+  try {
+    const response = await api.post('/students/login_otp', { phone, otp });
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('OTP login error:', error);
+    return { success: false, message: error.response?.data?.detail || 'OTP login failed' };
+  }
+};
+
+export const registerStudentOtp = async (payload) => {
+  try {
+    const response = await api.post('/students/register_otp', payload);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('OTP registration error:', error);
+    return { success: false, message: error.response?.data?.detail || 'Registration failed' };
+  }
+};
+
+export const requestPasswordReset = async ({ email }) => {
+  try {
+    const response = await api.post('/students/password_reset/request', { email });
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Password reset request error:', error);
+    return { success: false, message: error.response?.data?.detail || 'Failed to request password reset' };
+  }
+};
+
+export const confirmPasswordReset = async ({ email, otp, newPassword }) => {
+  try {
+    const response = await api.post('/students/password_reset/confirm', {
+      email,
+      otp,
+      new_password: newPassword,
+    });
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Password reset confirm error:', error);
+    return { success: false, message: error.response?.data?.detail || 'Failed to reset password' };
+  }
+};
+
+export const getStudent = async (studentId) => {
+  try {
+    const response = await api.get(`/students/${studentId}`);
+    return { success: true, data: response.data };
+  } catch (error) {
+    console.error('Get student error:', error);
+    return { success: false, message: error.response?.data?.detail || 'Failed to load student' };
   }
 };

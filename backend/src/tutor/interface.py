@@ -77,13 +77,31 @@ class AI_Tutor:
     # Agent selection
     # ----------------------------------------------------------
     def _get_agent_for_subject(self, subject: str) -> Optional[object]:
+        def subject_key(value: str) -> str:
+            s = (value or "").strip().lower()
+            s = re.sub(r"\(.*?\)", "", s)
+            s = s.replace("&", "and")
+            s = re.sub(r"[^a-z0-9]+", " ", s)
+            return re.sub(r"\s+", " ", s).strip()
+
+        key = subject_key(subject)
+
         subject_map = {
             "science": "science_tutor",
+            "evs": "science_tutor",
+            "environmental studies": "science_tutor",
+            "environmental studies evs": "science_tutor",
             "math": "math_tutor",
+            "maths": "math_tutor",
+            "mathematics": "math_tutor",
             "social studies": "social_tutor",
+            "social science": "social_tutor",
             "english": "english_tutor",
+            "hindi": "english_tutor",
+            "kannada": "english_tutor",
         }
-        agent_key = subject_map.get(subject.lower(), "learning_coordinator")
+
+        agent_key = subject_map.get(key, "learning_coordinator")
         return self.agents.get(agent_key)
 
     # ----------------------------------------------------------
@@ -91,11 +109,25 @@ class AI_Tutor:
     # ----------------------------------------------------------
     def _get_allowed_question_types(self, grade_band: str) -> List[str]:
         """Return allowed question types based on grade band."""
-        if grade_band in ["1-2", "1-4"]:
+        def parse_grade(value: str) -> int | None:
+            if not value:
+                return None
+            m = re.search(r"\d+", str(value))
+            if not m:
+                return None
+            try:
+                return int(m.group(0))
+            except Exception:
+                return None
+
+        normalized = (grade_band or "").strip()
+        grade_num = parse_grade(normalized)
+
+        if normalized in ["1-2", "1-4"] or (grade_num is not None and grade_num <= 4):
             return ["mcq", "matching", "select_image", "spell_word", "pronunciation"]
-        elif grade_band in ["5-7"]:
+        elif normalized in ["5-7"] or (grade_num is not None and 5 <= grade_num <= 7):
             return ["mcq", "true_false"]
-        elif grade_band in ["8-10"]:
+        elif normalized in ["8-10"] or (grade_num is not None and 8 <= grade_num <= 10):
             return ["fill_in_the_blank", "short_answer"]
         else:
             # Default fallback

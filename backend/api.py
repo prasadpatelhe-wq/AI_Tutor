@@ -28,8 +28,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
+import hashlib
+import re
+import secrets
 from src.tutor.interface import tutor_interface as AI_TUTOR
 from src.tutor.interface import tutor_interface
 from backend.database import SessionLocal
@@ -101,6 +104,22 @@ def run_migrations():
                     print("Migrating: Adding medium column to students table...")
                     cursor.execute("ALTER TABLE students ADD COLUMN medium TEXT")
 
+                if "phone" not in columns:
+                    print("Migrating: Adding phone column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN phone TEXT")
+
+                if "auth_provider" not in columns:
+                    print("Migrating: Adding auth_provider column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN auth_provider TEXT")
+
+                if "goal" not in columns:
+                    print("Migrating: Adding goal column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN goal TEXT")
+
+                if "preferred_subject_ids" not in columns:
+                    print("Migrating: Adding preferred_subject_ids column to students table...")
+                    cursor.execute("ALTER TABLE students ADD COLUMN preferred_subject_ids TEXT")
+
                 # Flashcard subchapter support
                 cursor.execute("PRAGMA table_info(flashcard)")
                 flash_cols = [info[1] for info in cursor.fetchall()]
@@ -111,6 +130,9 @@ def run_migrations():
                 conn.commit()
             finally:
                 conn.close()
+
+            # Ensure any newly-added tables are created (safe: create missing only).
+            Base.metadata.create_all(bind=engine)
 
             print("Database schema check completed.")
             return
@@ -167,6 +189,22 @@ def run_migrations():
                     print("Migrating: Adding medium column to students...")
                     conn.execute(text("ALTER TABLE students ADD COLUMN medium VARCHAR(50) NULL"))
 
+                if "phone" not in cols:
+                    print("Migrating: Adding phone column to students...")
+                    conn.execute(text("ALTER TABLE students ADD COLUMN phone VARCHAR(20) NULL"))
+
+                if "auth_provider" not in cols:
+                    print("Migrating: Adding auth_provider column to students...")
+                    conn.execute(text("ALTER TABLE students ADD COLUMN auth_provider VARCHAR(20) NULL"))
+
+                if "goal" not in cols:
+                    print("Migrating: Adding goal column to students...")
+                    conn.execute(text("ALTER TABLE students ADD COLUMN goal VARCHAR(50) NULL"))
+
+                if "preferred_subject_ids" not in cols:
+                    print("Migrating: Adding preferred_subject_ids column to students...")
+                    conn.execute(text("ALTER TABLE students ADD COLUMN preferred_subject_ids TEXT NULL"))
+
                 # Flashcard subchapter support
                 flash_cols = {
                     row[0]
@@ -180,6 +218,9 @@ def run_migrations():
                 if "subchapter_id" not in flash_cols:
                     print("Migrating: Adding subchapter_id to flashcard table...")
                     conn.execute(text("ALTER TABLE flashcard ADD COLUMN subchapter_id VARCHAR(36) NULL"))
+
+            # Ensure any newly-added tables are created (safe: create missing only).
+            Base.metadata.create_all(bind=engine)
 
             print("Database schema check completed.")
             return
@@ -199,6 +240,15 @@ logger = logging.getLogger(__name__)
 PARENT_PIN = os.getenv("PARENT_PIN")
 if not PARENT_PIN:
     logger.warning("PARENT_PIN not set; parent verification endpoint will be disabled.")
+
+PARENT_PHONE = os.getenv("PARENT_PHONE")
+if not PARENT_PHONE:
+    logger.warning("PARENT_PHONE not set; parent OTP endpoint will be disabled.")
+
+OTP_SECRET = os.getenv("OTP_SECRET", "dev-insecure-otp-secret")
+OTP_TTL_MINUTES = int(os.getenv("OTP_TTL_MINUTES", "10"))
+OTP_MAX_ATTEMPTS = int(os.getenv("OTP_MAX_ATTEMPTS", "5"))
+OTP_ECHO = os.getenv("OTP_ECHO", "").strip().lower() in {"1", "true", "yes", "y"}
 app = FastAPI(title="Euri AI Tutor API", version="2.0")
 
 # Game state management
@@ -284,6 +334,13 @@ PERKS_SHOP = [
 class ParentPinRequest(BaseModel):
     pin: str
 
+class ParentOtpRequest(BaseModel):
+    phone: str
+
+class ParentOtpVerifyRequest(BaseModel):
+    phone: str
+    otp: str
+
 class VideoRequest(BaseModel):
     subject: str
 
@@ -354,6 +411,53 @@ app.add_middleware(
 def health_check():
     return {"status": "ok", "tutor_ready": tutor_ready}
 
+def _normalize_phone(phone: str) -> str:
+    raw = (phone or "").strip()
+    digits = re.sub(r"\D", "", raw)
+    if not digits:
+        raise HTTPException(status_code=400, detail="Invalid phone number")
+    if len(digits) == 10:
+        return f"+91{digits}"
+    return f"+{digits}"
+
+
+def _compute_otp_hash(code: str, identifier: str, purpose: str) -> str:
+    msg = f"{purpose}:{identifier}:{code}".encode()
+    return hmac.new(OTP_SECRET.encode(), msg, hashlib.sha256).hexdigest()
+
+
+def _verify_and_consume_parent_otp(db, phone: str, otp: str) -> None:
+    from backend.models.otp_code import OtpCode
+
+    otp_row = (
+        db.query(OtpCode)
+        .filter(
+            OtpCode.channel == "phone",
+            OtpCode.identifier == phone,
+            OtpCode.purpose == "parent",
+            OtpCode.consumed_at.is_(None),
+            OtpCode.expires_at > datetime.utcnow(),
+        )
+        .order_by(OtpCode.created_at.desc())
+        .first()
+    )
+
+    if not otp_row:
+        raise HTTPException(status_code=400, detail="OTP expired or not requested. Please request a new OTP.")
+
+    if (otp_row.attempts or 0) >= OTP_MAX_ATTEMPTS:
+        raise HTTPException(status_code=429, detail="Too many wrong attempts. Please request a new OTP.")
+
+    expected = _compute_otp_hash((otp or "").strip(), phone, "parent")
+    if not hmac.compare_digest(expected, otp_row.otp_hash):
+        otp_row.attempts = (otp_row.attempts or 0) + 1
+        db.commit()
+        raise HTTPException(status_code=400, detail="Invalid OTP. Please try again.")
+
+    otp_row.consumed_at = datetime.utcnow()
+    db.commit()
+
+
 @app.post("/verify_parent")
 def api_verify_parent(req: ParentPinRequest):
     if not PARENT_PIN:
@@ -363,6 +467,59 @@ def api_verify_parent(req: ParentPinRequest):
         game_state.parent_authenticated = True
         return {"success": True, "message": "✅ Parent access granted!"}
     return {"success": False, "message": "❌ Wrong PIN. Try again!"}
+
+@app.post("/parent/request_otp")
+def api_parent_request_otp(req: ParentOtpRequest):
+    if not PARENT_PHONE:
+        raise HTTPException(status_code=503, detail="Parent OTP not configured.")
+
+    phone = _normalize_phone(req.phone)
+    allowed = _normalize_phone(PARENT_PHONE)
+    if phone != allowed:
+        raise HTTPException(status_code=403, detail="This phone number is not authorized for parent access.")
+
+    db = SessionLocal()
+    try:
+        from backend.models.otp_code import OtpCode
+
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        record = OtpCode(
+            channel="phone",
+            identifier=phone,
+            purpose="parent",
+            otp_hash=_compute_otp_hash(code, phone, "parent"),
+            expires_at=datetime.utcnow() + timedelta(minutes=OTP_TTL_MINUTES),
+            attempts=0,
+        )
+        db.add(record)
+        db.commit()
+
+        print(f"[OTP] purpose=parent channel=phone identifier={phone} otp={code}")
+        response = {"success": True, "message": "OTP sent"}
+        if OTP_ECHO:
+            response["dev_otp"] = code
+        return response
+    finally:
+        db.close()
+
+
+@app.post("/parent/verify_otp")
+def api_parent_verify_otp(req: ParentOtpVerifyRequest):
+    if not PARENT_PHONE:
+        raise HTTPException(status_code=503, detail="Parent OTP not configured.")
+
+    phone = _normalize_phone(req.phone)
+    allowed = _normalize_phone(PARENT_PHONE)
+    if phone != allowed:
+        raise HTTPException(status_code=403, detail="This phone number is not authorized for parent access.")
+
+    db = SessionLocal()
+    try:
+        _verify_and_consume_parent_otp(db, phone=phone, otp=req.otp)
+        game_state.parent_authenticated = True
+        return {"success": True, "message": "✅ Parent access granted!"}
+    finally:
+        db.close()
 
 @app.post("/logout_parent")
 def api_logout_parent():

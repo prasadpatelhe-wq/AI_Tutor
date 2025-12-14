@@ -17,6 +17,7 @@ from backend.models.question import Question
 from backend.models.flashcard import Flashcard
 from backend.models.scorecard import Scorecard
 from backend.models.student_progress import StudentProgress
+from backend.models.otp_code import OtpCode
 
 # Obsolete models (commented out)
 # from backend.models.grade import Grade

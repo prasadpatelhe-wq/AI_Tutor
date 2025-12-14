@@ -5,6 +5,7 @@ Uses intelligent model selection from available EuriAI models.
 """
 
 from typing import Dict
+import re
 from .framework import euriai_framework
 
 # Optimized Agent Configurations with Available EuriAI Models
@@ -54,7 +55,25 @@ class SubjectExpert:
         try:
             docs = self.retriever.invoke(query)
             if subject:
-                docs = [doc for doc in docs if doc.metadata.get('subject', '').lower() == subject.lower()]
+                def subject_key(value: str) -> str:
+                    s = (value or "").strip().lower()
+                    s = re.sub(r"\(.*?\)", "", s)
+                    s = s.replace("&", "and")
+                    s = re.sub(r"[^a-z0-9]+", " ", s)
+                    return re.sub(r"\s+", " ", s).strip()
+
+                requested = subject_key(subject)
+                filtered = []
+                for doc in docs:
+                    doc_subject = subject_key(doc.metadata.get('subject', ''))
+                    if not doc_subject:
+                        continue
+                    if doc_subject == requested or (requested and (requested in doc_subject or doc_subject in requested)):
+                        filtered.append(doc)
+
+                # If nothing matches, fall back to unfiltered docs (better than empty context)
+                if filtered:
+                    docs = filtered
 
             return "\n".join([doc.page_content for doc in docs[:3]])
         except Exception:
@@ -91,4 +110,3 @@ class SubjectExpert:
 def create_agent(agent_type: str, retriever=None) -> SubjectExpert:
     """Factory function to create subject expert agents."""
     return SubjectExpert(agent_type, retriever)
-
