@@ -17,6 +17,9 @@ import ParentView from "./views/ParentView";
 import LoginView from "./views/LoginView";
 import RegisterView from "./views/RegisterView";
 
+// Import animation components
+import AnimatedBackground from "./components/AnimatedBackground";
+
 // Import theme system and dynamic styles
 import { ThemeProvider, useTheme } from "./ThemeContext";
 import { getThemeFromGrade, getThemeNameFromGrade } from "./themes";
@@ -422,8 +425,8 @@ const App = () => {
     setCurrentQuestionIndex(0);
     setQuizProgress(`Progress: 0/${basicQuestions.length}`);
     return data;
-  };
-
+  }
+;
   const handleQuizAnswer = (answerIndex) => {
     const newAnswers = [...quizAnswers];
     newAnswers[currentQuestionIndex] = answerIndex;
@@ -448,8 +451,9 @@ const App = () => {
   const handleLoginSuccess = (student) => {
     setCurrentStudent(student);
     setUserGrade(student.grade_band);
-    setUserBoard(student.board || 'CBSE'); // Default if missing
-    setCurrentScreen('selection'); // Go directly to subject selection for logged-in users
+    setUserBoard(student.board || 'CBSE');
+    setUserLanguage(student.medium || 'en');  // Pre-fill language from registration
+    setCurrentScreen('selection');
   };
 
   const handleRegisterSuccess = () => {
@@ -472,6 +476,7 @@ const App = () => {
     return (
       <ThemeProvider gradeBand="Grade 9"> {/* Force teen theme */}
         <style>{defaultThemeStyles}</style>
+        <AnimatedBackground theme="teen" />
         {authView === 'login' ? (
           <LoginView onLoginSuccess={handleLoginSuccess} onNavigateToRegister={() => setAuthView('register')} />
         ) : (
@@ -584,6 +589,7 @@ const App = () => {
             setupLearning={setupLearning}
             selectionStatus={selectionStatus}
             theme={currentThemeName}
+            currentStudent={currentStudent}
           />
         )}
 

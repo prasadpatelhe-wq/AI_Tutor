@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import soundManager from '../SoundManager';
+import ConfettiCelebration from '../components/ConfettiCelebration';
 
 const QuizView = ({
   userSubject,
@@ -22,6 +23,7 @@ const QuizView = ({
   const [isQuizActive, setIsQuizActive] = useState(false);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
 
   // Initialize sound manager
   useEffect(() => {
@@ -162,6 +164,12 @@ const QuizView = ({
 
     setLocalResults(result);
     setIsQuizActive(false);
+
+    // Show confetti for good scores (80%+)
+    const scorePercent = (result.correctCount / localQuestions.length) * 100;
+    if (scorePercent >= 80) {
+      setShowConfetti(true);
+    }
   };
 
   const goToNextLevel = () => {
@@ -177,6 +185,7 @@ const QuizView = ({
     setIsQuizActive(false);
     setSelectedAnswer(null);
     setShowFeedback(false);
+    setShowConfetti(false);
   };
 
   const currentQ = localQuestions[localIndex];
@@ -210,6 +219,13 @@ const QuizView = ({
 
   return (
     <div className="content-section">
+      {/* Confetti Celebration for high scores */}
+      <ConfettiCelebration
+        show={showConfetti}
+        theme={theme}
+        onComplete={() => setShowConfetti(false)}
+      />
+
       <style>{`
         @keyframes fadeIn {
           from { opacity: 0; transform: translateY(10px); }

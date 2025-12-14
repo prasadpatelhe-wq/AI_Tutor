@@ -1,5 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import soundManager from '../SoundManager';
+/**
+ * SelectionView - Enhanced Redesign
+ * Beautiful step-by-step learning setup with theme-aware design
+ */
+
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { colors, fonts, radius, shadows, spacing, icons } from '../design/tokens';
+import Button from '../components/ui/Button';
+import Card from '../components/ui/Card';
 
 const SelectionView = ({
   userGrade,
@@ -16,14 +24,17 @@ const SelectionView = ({
   languages,
   setupLearning,
   selectionStatus,
-  theme = 'teen'
+  theme = 'teen',
+  currentStudent = null
 }) => {
   const [activeStep, setActiveStep] = useState(0);
 
-  // Initialize sound manager
-  useEffect(() => {
-    soundManager.setTheme(theme);
-  }, [theme]);
+  const c = colors[theme];
+  const f = fonts[theme];
+  const r = radius[theme];
+  const sh = shadows[theme];
+  const sp = spacing[theme];
+  const ic = icons[theme];
 
   // Track completion progress
   useEffect(() => {
@@ -35,627 +46,505 @@ const SelectionView = ({
     setActiveStep(step);
   }, [userGrade, userBoard, userLanguage, userSubjectId]);
 
-  // Clean Duolingo-inspired theme styles
-  const getThemeStyles = () => {
-    switch (theme) {
-      case 'kids':
-        return {
-          primary: '#58CC02',       // Duolingo green
-          secondary: '#FF9600',     // Orange
-          accent: '#1CB0F6',        // Blue
-          background: '#f7f7f7',
-          cardBg: '#ffffff',
-          borderColor: '#e5e5e5',
-          textPrimary: '#3c3c3c',
-          textSecondary: '#777777',
-          labelColor: '#58CC02',
-          successGreen: '#58CC02',
-          borderRadius: '16px',
-          shadowColor: 'rgba(0,0,0,0.1)',
-          stepColors: ['#58CC02', '#1CB0F6', '#FF9600', '#CE82FF'],
-        };
-      case 'teen':
-        return {
-          primary: '#1CB0F6',       // Blue
-          secondary: '#8549BA',     // Purple
-          accent: '#FF4B4B',        // Red
-          background: 'linear-gradient(180deg, #131F24 0%, #1a2c35 100%)',
-          cardBg: 'rgba(255, 255, 255, 0.05)',
-          borderColor: 'rgba(255, 255, 255, 0.1)',
-          textPrimary: '#ffffff',
-          textSecondary: 'rgba(255, 255, 255, 0.6)',
-          labelColor: '#1CB0F6',
-          successGreen: '#58CC02',
-          borderRadius: '16px',
-          shadowColor: 'rgba(0,0,0,0.3)',
-          stepColors: ['#1CB0F6', '#8549BA', '#FF9600', '#58CC02'],
-        };
-      case 'mature':
-      default:
-        return {
-          primary: '#1CB0F6',
-          secondary: '#58CC02',
-          accent: '#FF9600',
-          background: 'linear-gradient(180deg, #1a1a1a 0%, #2d2d2d 100%)',
-          cardBg: 'rgba(255, 255, 255, 0.03)',
-          borderColor: 'rgba(255, 255, 255, 0.08)',
-          textPrimary: '#ffffff',
-          textSecondary: 'rgba(255, 255, 255, 0.5)',
-          labelColor: '#1CB0F6',
-          successGreen: '#58CC02',
-          borderRadius: '12px',
-          shadowColor: 'rgba(0,0,0,0.4)',
-          stepColors: ['#1CB0F6', '#58CC02', '#FF9600', '#8549BA'],
-        };
-    }
-  };
-
-  const themeStyles = getThemeStyles();
   const allSelected = userGrade && userBoard && userLanguage && userSubjectId;
-  const isLightTheme = theme === 'kids';
+  const isFieldsLocked = !!currentStudent;
 
-  // Handle button click
-  const handleBeginJourney = () => {
-    if (allSelected) {
-      soundManager.playAchievementSound();
-      setupLearning();
+  const steps = [
+    { icon: theme === 'kids' ? '🎓' : '◎', label: 'Grade', field: 'grade' },
+    { icon: theme === 'kids' ? '🏫' : '◈', label: 'Board', field: 'board' },
+    { icon: theme === 'kids' ? '🌍' : '◉', label: 'Language', field: 'language' },
+    { icon: theme === 'kids' ? '📖' : '★', label: 'Subject', field: 'subject' },
+  ];
+
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: { staggerChildren: 0.1, delayChildren: 0.1 }
     }
   };
+
+  const cardVariants = {
+    hidden: { opacity: 0, y: 20, scale: 0.95 },
+    visible: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      transition: { type: 'spring', stiffness: 300, damping: 24 }
+    }
+  };
+
+  const styles = useMemo(() => ({
+    container: {
+      minHeight: 'calc(100vh - 100px)',
+      padding: sp.xl,
+      background: c.bgGradient,
+      position: 'relative',
+      overflow: 'hidden',
+    },
+    innerContainer: {
+      maxWidth: '600px',
+      margin: '0 auto',
+      position: 'relative',
+      zIndex: 1,
+    },
+    header: {
+      textAlign: 'center',
+      marginBottom: sp.xl,
+    },
+    title: {
+      fontFamily: f.display,
+      fontSize: theme === 'kids' ? '2rem' : '1.75rem',
+      fontWeight: 700,
+      color: c.text,
+      marginBottom: sp.xs,
+      background: theme === 'teen'
+        ? `linear-gradient(135deg, ${c.primary} 0%, ${c.secondary} 100%)`
+        : 'none',
+      WebkitBackgroundClip: theme === 'teen' ? 'text' : 'initial',
+      WebkitTextFillColor: theme === 'teen' ? 'transparent' : c.text,
+      backgroundClip: theme === 'teen' ? 'text' : 'initial',
+    },
+    subtitle: {
+      fontFamily: f.body,
+      fontSize: '1rem',
+      color: c.textMuted,
+    },
+    progressContainer: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: sp.xs,
+      marginBottom: sp.xl,
+    },
+    stepIndicator: {
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: sp.xs,
+    },
+    stepCircle: {
+      width: theme === 'kids' ? '48px' : '40px',
+      height: theme === 'kids' ? '48px' : '40px',
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontFamily: f.display,
+      fontWeight: 700,
+      fontSize: theme === 'kids' ? '1.25rem' : '1rem',
+      transition: 'all 0.4s ease',
+    },
+    stepLabel: {
+      fontFamily: f.body,
+      fontSize: '0.75rem',
+      fontWeight: 600,
+      textTransform: theme === 'teen' ? 'uppercase' : 'none',
+      letterSpacing: theme === 'teen' ? '0.5px' : '0',
+      transition: 'all 0.3s ease',
+    },
+    connector: {
+      width: '40px',
+      height: '4px',
+      borderRadius: r.full,
+      marginBottom: '28px',
+      transition: 'all 0.4s ease',
+      overflow: 'hidden',
+    },
+    selectionCard: {
+      background: c.bgCard,
+      backdropFilter: 'blur(10px)',
+      borderRadius: r.lg,
+      padding: sp.lg,
+      marginBottom: sp.md,
+      border: `2px solid transparent`,
+      transition: 'all 0.3s ease',
+    },
+    cardHeader: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: sp.sm,
+    },
+    cardLabel: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: sp.sm,
+      fontFamily: f.body,
+      fontSize: '0.95rem',
+      fontWeight: 600,
+      color: c.primary,
+    },
+    select: {
+      width: '100%',
+      padding: '14px 48px 14px 16px',
+      borderRadius: r.md,
+      border: `2px solid ${theme === 'teen' ? 'rgba(255,255,255,0.15)' : c.primaryLight}`,
+      fontSize: '0.95rem',
+      fontWeight: 500,
+      fontFamily: f.body,
+      background: theme === 'teen'
+        ? 'rgba(255,255,255,0.08)'
+        : theme === 'kids'
+          ? 'rgba(255,255,255,0.9)'
+          : 'rgba(255,255,255,0.05)',
+      color: c.text,
+      appearance: 'none',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      outline: 'none',
+    },
+    lockedField: {
+      width: '100%',
+      padding: '14px 16px',
+      borderRadius: r.md,
+      border: `2px solid ${theme === 'teen' ? 'rgba(255,255,255,0.1)' : c.primaryLight + '50'}`,
+      fontSize: '0.95rem',
+      fontWeight: 500,
+      fontFamily: f.body,
+      background: theme === 'teen'
+        ? 'rgba(255,255,255,0.03)'
+        : 'rgba(0,0,0,0.03)',
+      color: c.textMuted,
+    },
+    checkBadge: {
+      width: '24px',
+      height: '24px',
+      borderRadius: '50%',
+      background: c.success,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#fff',
+      fontSize: '14px',
+      animation: 'checkPop 0.3s ease-out',
+    },
+    summaryCard: {
+      background: theme === 'teen'
+        ? `linear-gradient(135deg, ${c.primary}15 0%, ${c.secondary}15 100%)`
+        : theme === 'kids'
+          ? `linear-gradient(135deg, ${c.primaryLight}30 0%, ${c.accent1}20 100%)`
+          : `linear-gradient(135deg, ${c.primary}10 0%, ${c.secondary}10 100%)`,
+      border: `1px solid ${c.primary}30`,
+      borderRadius: r.lg,
+      padding: sp.lg,
+      marginBottom: sp.lg,
+    },
+    summaryTitle: {
+      fontFamily: f.display,
+      fontSize: '0.95rem',
+      fontWeight: 700,
+      color: c.primary,
+      marginBottom: sp.md,
+      display: 'flex',
+      alignItems: 'center',
+      gap: sp.xs,
+    },
+    summaryGrid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(2, 1fr)',
+      gap: sp.sm,
+    },
+    summaryItem: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: sp.xs,
+      padding: sp.sm,
+      background: c.bgCard,
+      borderRadius: r.md,
+      border: `1px solid ${theme === 'teen' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)'}`,
+    },
+    status: {
+      textAlign: 'center',
+      padding: sp.md,
+      borderRadius: r.md,
+      fontWeight: 600,
+      fontSize: '0.9rem',
+      marginTop: sp.md,
+    },
+  }), [theme, c, f, r, sp]);
+
+  const getStepStyle = (index) => {
+    const isCompleted = activeStep > index;
+    const isCurrent = activeStep === index;
+
+    return {
+      ...styles.stepCircle,
+      background: isCompleted
+        ? c.success
+        : isCurrent
+          ? `linear-gradient(135deg, ${c.primary} 0%, ${c.secondary} 100%)`
+          : theme === 'teen'
+            ? 'rgba(255,255,255,0.1)'
+            : 'rgba(0,0,0,0.1)',
+      color: isCompleted || isCurrent ? '#fff' : c.textMuted,
+      boxShadow: isCurrent
+        ? theme === 'teen'
+          ? `0 0 20px ${c.primary}50`
+          : `0 8px 20px ${c.primary}30`
+        : 'none',
+      transform: isCurrent ? 'scale(1.1)' : 'scale(1)',
+    };
+  };
+
+  const getConnectorStyle = (index) => ({
+    ...styles.connector,
+    background: activeStep > index
+      ? `linear-gradient(90deg, ${c.success}, ${c.success})`
+      : theme === 'teen'
+        ? 'rgba(255,255,255,0.1)'
+        : 'rgba(0,0,0,0.1)',
+    boxShadow: activeStep > index && theme === 'teen'
+      ? `0 0 10px ${c.success}50`
+      : 'none',
+  });
+
+  const getCardBorderColor = (hasValue) =>
+    hasValue ? c.success : theme === 'teen' ? 'rgba(255,255,255,0.1)' : c.primaryLight + '50';
 
   return (
-    <div className="content-section" style={{ position: 'relative' }}>
-      {/* Clean CSS without heavy animations */}
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={containerVariants}
+      style={styles.container}
+    >
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700&family=Quicksand:wght@300;400;500;600;700&display=swap');
+
         @keyframes checkPop {
           0% { transform: scale(0); }
           50% { transform: scale(1.2); }
           100% { transform: scale(1); }
         }
-        
-        .selection-card {
-          animation: fadeIn 0.4s ease-out;
-          animation-fill-mode: both;
+
+        .selection-select:focus {
+          border-color: ${c.primary} !important;
+          box-shadow: 0 0 0 3px ${c.primary}20;
         }
-        
-        .selection-card:nth-child(1) { animation-delay: 0.05s; }
-        .selection-card:nth-child(2) { animation-delay: 0.1s; }
-        .selection-card:nth-child(3) { animation-delay: 0.15s; }
-        .selection-card:nth-child(4) { animation-delay: 0.2s; }
-        
+
+        .selection-select option {
+          background: ${theme === 'teen' ? '#1a1a2e' : '#fff'};
+          color: ${theme === 'teen' ? '#fff' : '#333'};
+          padding: 12px;
+        }
+
         .selection-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px ${themeStyles.shadowColor};
-        }
-        
-        .premium-select {
-          appearance: none;
-          -webkit-appearance: none;
-          -moz-appearance: none;
-          background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='${isLightTheme ? '%23777' : '%23fff'}' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-          background-repeat: no-repeat;
-          background-position: right 16px center;
-          background-size: 20px;
-          cursor: pointer;
-        }
-        
-        .premium-select:focus {
-          border-color: ${themeStyles.primary};
-          outline: none;
-          box-shadow: 0 0 0 3px ${themeStyles.primary}30;
-        }
-        
-        .premium-button {
-          transition: all 0.2s ease;
-        }
-        
-        .premium-button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          filter: brightness(1.1);
-        }
-        
-        .premium-button:active:not(:disabled) {
-          transform: translateY(0);
-        }
-        
-        .check-icon {
-          animation: checkPop 0.3s ease-out;
+          transform: translateY(-4px);
+          box-shadow: ${sh.lg};
         }
       `}</style>
 
-      {/* Header */}
+      {/* Background decoration */}
       <div style={{
-        textAlign: 'center',
-        marginBottom: '32px',
-        animation: 'fadeIn 0.3s ease-out'
-      }}>
-        <h2 style={{
-          color: themeStyles.textPrimary,
-          fontSize: theme === 'kids' ? '1.8rem' : '1.6rem',
-          fontWeight: '700',
-          marginBottom: '8px',
-          letterSpacing: '-0.5px'
-        }}>
-          📚 Set Up Your Learning Journey
-        </h2>
-        <p style={{
-          color: themeStyles.textSecondary,
-          fontSize: '1rem',
-          margin: 0
-        }}>
-          Complete these steps to personalize your experience
-        </p>
-      </div>
+        position: 'absolute',
+        inset: 0,
+        background: c.bgGradient,
+        zIndex: 0,
+      }} />
 
-      {/* Progress Steps - Duolingo style */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        gap: '8px',
-        marginBottom: '40px'
-      }}>
-        {['Grade', 'Board', 'Language', 'Subject'].map((label, i) => {
-          const isCompleted = activeStep > i;
-          const isCurrent = activeStep === i;
+      {/* Floating orbs */}
+      {theme === 'teen' && (
+        <>
+          <div style={{
+            position: 'absolute',
+            width: '300px',
+            height: '300px',
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${c.primary}20 0%, transparent 70%)`,
+            top: '-100px',
+            right: '-100px',
+            filter: 'blur(40px)',
+          }} />
+          <div style={{
+            position: 'absolute',
+            width: '200px',
+            height: '200px',
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${c.secondary}20 0%, transparent 70%)`,
+            bottom: '-50px',
+            left: '-50px',
+            filter: 'blur(40px)',
+          }} />
+        </>
+      )}
 
-          return (
-            <React.Fragment key={label}>
-              <div style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '6px'
-              }}>
-                <div style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '50%',
-                  background: isCompleted
-                    ? themeStyles.successGreen
-                    : isCurrent
-                      ? themeStyles.primary
-                      : isLightTheme ? '#e5e5e5' : 'rgba(255,255,255,0.1)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: isCompleted || isCurrent ? 'white' : themeStyles.textSecondary,
-                  fontWeight: '700',
-                  fontSize: '14px',
-                  transition: 'all 0.3s ease',
-                  border: isCurrent ? `3px solid ${themeStyles.primary}40` : 'none'
-                }}>
-                  {isCompleted ? (
-                    <span className="check-icon" style={{ fontSize: '18px' }}>✓</span>
-                  ) : (
-                    i + 1
-                  )}
+      <div style={styles.innerContainer}>
+        {/* Header */}
+        <motion.div variants={cardVariants} style={styles.header}>
+          <h2 style={styles.title}>
+            {theme === 'kids' ? '📚 ' : ''}
+            {theme === 'kids' ? 'Set Up Your Learning!' : theme === 'teen' ? 'SETUP YOUR JOURNEY' : 'Configure Learning'}
+          </h2>
+          <p style={styles.subtitle}>
+            {theme === 'kids'
+              ? 'Pick your favorites to get started!'
+              : 'Complete these steps to personalize your experience'}
+          </p>
+        </motion.div>
+
+        {/* Progress Steps */}
+        <motion.div variants={cardVariants} style={styles.progressContainer}>
+          {steps.map((step, i) => (
+            <React.Fragment key={step.label}>
+              <div style={styles.stepIndicator}>
+                <div style={getStepStyle(i)}>
+                  {activeStep > i ? '✓' : step.icon}
                 </div>
                 <span style={{
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  color: isCompleted || isCurrent ? themeStyles.primary : themeStyles.textSecondary,
-                  transition: 'all 0.3s ease'
+                  ...styles.stepLabel,
+                  color: activeStep >= i ? c.primary : c.textMuted,
                 }}>
-                  {label}
+                  {step.label}
                 </span>
               </div>
-              {i < 3 && (
-                <div style={{
-                  width: '40px',
-                  height: '4px',
-                  borderRadius: '2px',
-                  background: activeStep > i
-                    ? themeStyles.successGreen
-                    : isLightTheme ? '#e5e5e5' : 'rgba(255,255,255,0.1)',
-                  marginBottom: '24px',
-                  transition: 'all 0.3s ease'
-                }} />
+              {i < steps.length - 1 && (
+                <div style={getConnectorStyle(i)} />
               )}
             </React.Fragment>
-          );
-        })}
-      </div>
+          ))}
+        </motion.div>
 
-      {/* Selection Cards */}
-      <div style={{ maxWidth: '500px', margin: '0 auto' }}>
-        {/* Grade Selection */}
-        <div
-          className="selection-card"
-          style={{
-            background: themeStyles.cardBg,
-            border: `2px solid ${userGrade ? themeStyles.successGreen : themeStyles.borderColor}`,
-            borderRadius: themeStyles.borderRadius,
-            padding: '20px',
-            marginBottom: '16px',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '12px'
-          }}>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              fontWeight: '600',
-              color: themeStyles.labelColor,
-              fontSize: '15px'
-            }}>
-              <span style={{ fontSize: '20px' }}>🎓</span>
-              Select Your Grade
-            </label>
-            {userGrade && (
-              <span className="check-icon" style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                background: themeStyles.successGreen,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '14px'
-              }}>✓</span>
-            )}
-          </div>
-          <select
-            className="premium-select"
-            value={userGrade || ''}
-            onChange={(e) => {
-              soundManager.playClickSound();
-              setUserGrade(e.target.value);
-            }}
+        {/* Selection Cards */}
+        {[
+          { label: 'Grade', icon: theme === 'kids' ? '🎓' : '◎', value: userGrade, options: grades, onChange: (e) => setUserGrade(e.target.value), locked: isFieldsLocked, displayValue: userGrade ? `Grade ${userGrade}` : null },
+          { label: 'Board', icon: theme === 'kids' ? '🏫' : '◈', value: userBoard, options: boards, onChange: (e) => setUserBoard(e.target.value), locked: isFieldsLocked },
+          { label: 'Language', icon: theme === 'kids' ? '🌍' : '◉', value: userLanguage, options: languages, onChange: (e) => setUserLanguage(e.target.value), locked: isFieldsLocked, valueKey: 'code' },
+          { label: 'Subject', icon: theme === 'kids' ? '📖' : '★', value: userSubjectId, options: subjects, onChange: handleSubjectChange, locked: false, valueKey: 'id' },
+        ].map((item, index) => (
+          <motion.div
+            key={item.label}
+            variants={cardVariants}
+            className="selection-card"
             style={{
-              width: '100%',
-              padding: '14px 48px 14px 16px',
-              borderRadius: '12px',
-              border: `2px solid ${themeStyles.borderColor}`,
-              fontSize: '15px',
-              fontWeight: '500',
-              background: isLightTheme ? 'white' : 'rgba(255,255,255,0.05)',
-              color: themeStyles.textPrimary,
-              transition: 'all 0.2s ease'
+              ...styles.selectionCard,
+              borderColor: getCardBorderColor(item.value),
             }}
           >
-            <option value="">Choose your grade level...</option>
-            {grades.map(g => (
-              <option key={g.id} value={g.name}>{g.display || g.name}</option>
-            ))}
-          </select>
-        </div>
+            <div style={styles.cardHeader}>
+              <span style={styles.cardLabel}>
+                <span style={{ fontSize: '1.25rem' }}>{item.icon}</span>
+                {theme === 'kids' ? `Pick Your ${item.label}` : `Select ${item.label}`}
+              </span>
+              {item.value && <span style={styles.checkBadge}>✓</span>}
+            </div>
 
-        {/* Board Selection */}
-        <div
-          className="selection-card"
-          style={{
-            background: themeStyles.cardBg,
-            border: `2px solid ${userBoard ? themeStyles.successGreen : themeStyles.borderColor}`,
-            borderRadius: themeStyles.borderRadius,
-            padding: '20px',
-            marginBottom: '16px',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '12px'
-          }}>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              fontWeight: '600',
-              color: themeStyles.labelColor,
-              fontSize: '15px'
-            }}>
-              <span style={{ fontSize: '20px' }}>🏫</span>
-              Select Your Board
-            </label>
-            {userBoard && (
-              <span className="check-icon" style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                background: themeStyles.successGreen,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '14px'
-              }}>✓</span>
+            {item.locked ? (
+              <div style={styles.lockedField}>
+                {item.displayValue || item.value || 'Not set'}
+              </div>
+            ) : (
+              <select
+                className="selection-select"
+                value={item.value || ''}
+                onChange={item.onChange}
+                style={{
+                  ...styles.select,
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(c.textMuted)}' stroke-width='2'%3E%3Cpolyline points='6,9 12,15 18,9'%3E%3C/polyline%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 12px center',
+                  backgroundSize: '20px',
+                }}
+              >
+                <option value="">
+                  {theme === 'kids' ? `Choose your ${item.label.toLowerCase()}...` : `Select ${item.label.toLowerCase()}...`}
+                </option>
+                {item.options.map(opt => (
+                  <option key={opt.id} value={item.valueKey ? opt[item.valueKey] : opt.name}>
+                    {opt.display || opt.name}
+                  </option>
+                ))}
+              </select>
             )}
-          </div>
-          <select
-            className="premium-select"
-            value={userBoard || ''}
-            onChange={(e) => {
-              soundManager.playClickSound();
-              setUserBoard(e.target.value);
-            }}
-            style={{
-              width: '100%',
-              padding: '14px 48px 14px 16px',
-              borderRadius: '12px',
-              border: `2px solid ${themeStyles.borderColor}`,
-              fontSize: '15px',
-              fontWeight: '500',
-              background: isLightTheme ? 'white' : 'rgba(255,255,255,0.05)',
-              color: themeStyles.textPrimary,
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <option value="">Choose your education board...</option>
-            {boards.map(b => (
-              <option key={b.id} value={b.name}>{b.name}</option>
-            ))}
-          </select>
-        </div>
+          </motion.div>
+        ))}
 
-        {/* Language Selection */}
-        <div
-          className="selection-card"
-          style={{
-            background: themeStyles.cardBg,
-            border: `2px solid ${userLanguage ? themeStyles.successGreen : themeStyles.borderColor}`,
-            borderRadius: themeStyles.borderRadius,
-            padding: '20px',
-            marginBottom: '16px',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '12px'
-          }}>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              fontWeight: '600',
-              color: themeStyles.labelColor,
-              fontSize: '15px'
-            }}>
-              <span style={{ fontSize: '20px' }}>🌍</span>
-              Select Language Medium
-            </label>
-            {userLanguage && (
-              <span className="check-icon" style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                background: themeStyles.successGreen,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '14px'
-              }}>✓</span>
-            )}
-          </div>
-          <select
-            className="premium-select"
-            value={userLanguage || ''}
-            onChange={(e) => {
-              soundManager.playClickSound();
-              setUserLanguage(e.target.value);
-            }}
-            style={{
-              width: '100%',
-              padding: '14px 48px 14px 16px',
-              borderRadius: '12px',
-              border: `2px solid ${themeStyles.borderColor}`,
-              fontSize: '15px',
-              fontWeight: '500',
-              background: isLightTheme ? 'white' : 'rgba(255,255,255,0.05)',
-              color: themeStyles.textPrimary,
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <option value="">Choose your preferred language...</option>
-            {languages.map(l => (
-              <option key={l.id} value={l.code}>{l.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Subject Selection */}
-        <div
-          className="selection-card"
-          style={{
-            background: themeStyles.cardBg,
-            border: `2px solid ${userSubjectId ? themeStyles.successGreen : themeStyles.borderColor}`,
-            borderRadius: themeStyles.borderRadius,
-            padding: '20px',
-            marginBottom: '24px',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: '12px'
-          }}>
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '10px',
-              fontWeight: '600',
-              color: themeStyles.labelColor,
-              fontSize: '15px'
-            }}>
-              <span style={{ fontSize: '20px' }}>📖</span>
-              Select Your Subject
-            </label>
-            {userSubjectId && (
-              <span className="check-icon" style={{
-                width: '24px',
-                height: '24px',
-                borderRadius: '50%',
-                background: themeStyles.successGreen,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '14px'
-              }}>✓</span>
-            )}
-          </div>
-          <select
-            className="premium-select"
-            value={userSubjectId || ''}
-            onChange={(e) => {
-              soundManager.playClickSound();
-              handleSubjectChange(e);
-            }}
-            style={{
-              width: '100%',
-              padding: '14px 48px 14px 16px',
-              borderRadius: '12px',
-              border: `2px solid ${themeStyles.borderColor}`,
-              fontSize: '15px',
-              fontWeight: '500',
-              background: isLightTheme ? 'white' : 'rgba(255,255,255,0.05)',
-              color: themeStyles.textPrimary,
-              transition: 'all 0.2s ease'
-            }}
-          >
-            <option value="">Choose a subject to explore...</option>
-            {subjects.map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Summary Card - Only show when at least one selection made */}
-        {activeStep > 0 && (
-          <div style={{
-            background: isLightTheme
-              ? 'linear-gradient(135deg, #f0f9ff 0%, #e0f7fa 100%)'
-              : 'linear-gradient(135deg, rgba(28, 176, 246, 0.1) 0%, rgba(88, 204, 2, 0.1) 100%)',
-            border: `1px solid ${themeStyles.primary}30`,
-            borderRadius: themeStyles.borderRadius,
-            padding: '20px',
-            marginBottom: '24px',
-            animation: 'fadeIn 0.3s ease-out'
-          }}>
-            <h4 style={{
-              color: themeStyles.primary,
-              marginBottom: '16px',
-              fontSize: '15px',
-              fontWeight: '700',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px'
-            }}>
-              ✨ Your Learning Profile
-            </h4>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
-              gap: '12px',
-              fontSize: '14px'
-            }}>
-              {[
-                { icon: '🎓', label: 'Grade', value: userGrade },
-                { icon: '🏫', label: 'Board', value: userBoard },
-                { icon: '🌍', label: 'Language', value: userLanguage },
-                { icon: '📖', label: 'Subject', value: subjects.find(s => String(s.id) === String(userSubjectId))?.name }
-              ].map((item, i) => (
-                <div
-                  key={i}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '10px 12px',
-                    background: isLightTheme ? 'white' : 'rgba(255,255,255,0.05)',
-                    borderRadius: '10px',
-                    border: `1px solid ${themeStyles.borderColor}`
-                  }}
-                >
-                  <span>{item.icon}</span>
-                  <div>
-                    <div style={{
-                      color: themeStyles.textSecondary,
-                      fontSize: '12px',
-                      marginBottom: '2px'
-                    }}>
-                      {item.label}
-                    </div>
-                    <div style={{
-                      color: item.value ? themeStyles.textPrimary : themeStyles.textSecondary,
-                      fontWeight: '600',
-                      fontSize: '13px'
-                    }}>
-                      {item.value || 'Not selected'}
+        {/* Summary Card */}
+        <AnimatePresence>
+          {activeStep > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              style={styles.summaryCard}
+            >
+              <h4 style={styles.summaryTitle}>
+                {theme === 'kids' ? '✨ Your Choices' : theme === 'teen' ? '⚡ YOUR PROFILE' : '◆ Summary'}
+              </h4>
+              <div style={styles.summaryGrid}>
+                {[
+                  { icon: theme === 'kids' ? '🎓' : '◎', label: 'Grade', value: userGrade },
+                  { icon: theme === 'kids' ? '🏫' : '◈', label: 'Board', value: userBoard },
+                  { icon: theme === 'kids' ? '🌍' : '◉', label: 'Language', value: userLanguage },
+                  { icon: theme === 'kids' ? '📖' : '★', label: 'Subject', value: subjects.find(s => String(s.id) === String(userSubjectId))?.name },
+                ].map((item, i) => (
+                  <div key={i} style={styles.summaryItem}>
+                    <span style={{ fontSize: '1.25rem' }}>{item.icon}</span>
+                    <div>
+                      <div style={{ fontSize: '0.7rem', color: c.textMuted }}>{item.label}</div>
+                      <div style={{
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        color: item.value ? c.text : c.textMuted,
+                      }}>
+                        {item.value || 'Not selected'}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* Begin Button - Duolingo style */}
-        <button
-          className="premium-button"
-          onClick={handleBeginJourney}
-          disabled={!allSelected}
-          style={{
-            width: '100%',
-            padding: '18px 32px',
-            borderRadius: '16px',
-            border: 'none',
-            fontSize: '17px',
-            fontWeight: '700',
-            cursor: allSelected ? 'pointer' : 'not-allowed',
-            background: allSelected
-              ? themeStyles.successGreen
-              : isLightTheme ? '#e5e5e5' : 'rgba(255,255,255,0.1)',
-            color: allSelected ? 'white' : themeStyles.textSecondary,
-            boxShadow: allSelected
-              ? `0 4px 0 0 #46a302, 0 8px 16px rgba(88, 204, 2, 0.3)`
-              : 'none',
-            marginBottom: '8px'
-          }}
-        >
-          🚀 Start Learning!
-        </button>
+        {/* Start Button */}
+        <motion.div variants={cardVariants}>
+          <Button
+            variant={allSelected ? 'gradient' : 'ghost'}
+            size="lg"
+            theme={theme}
+            fullWidth
+            glow={allSelected}
+            disabled={!allSelected}
+            onClick={setupLearning}
+            style={{
+              opacity: allSelected ? 1 : 0.5,
+              cursor: allSelected ? 'pointer' : 'not-allowed',
+            }}
+          >
+            {allSelected
+              ? theme === 'kids'
+                ? "🚀 Let's Start Learning!"
+                : theme === 'teen'
+                  ? '⚡ BEGIN JOURNEY'
+                  : 'Start Learning →'
+              : theme === 'kids'
+                ? '👆 Complete All Steps'
+                : 'Complete all selections'}
+          </Button>
+        </motion.div>
 
         {/* Status Message */}
         {selectionStatus && (
-          <div style={{
-            textAlign: 'center',
-            padding: '16px',
-            borderRadius: themeStyles.borderRadius,
-            background: selectionStatus.includes('❌')
-              ? 'rgba(255, 75, 75, 0.1)'
-              : 'rgba(88, 204, 2, 0.1)',
-            border: `1px solid ${selectionStatus.includes('❌') ? '#FF4B4B' : '#58CC02'}30`,
-            color: selectionStatus.includes('❌') ? '#FF4B4B' : themeStyles.successGreen,
-            fontWeight: '600',
-            fontSize: '14px',
-            marginTop: '16px',
-            animation: 'fadeIn 0.3s ease-out'
-          }}>
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            style={{
+              ...styles.status,
+              background: selectionStatus.includes('❌')
+                ? `${c.error}15`
+                : `${c.success}15`,
+              border: `1px solid ${selectionStatus.includes('❌') ? c.error : c.success}30`,
+              color: selectionStatus.includes('❌') ? c.error : c.success,
+            }}
+          >
             {selectionStatus}
-          </div>
+          </motion.div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 };
 
