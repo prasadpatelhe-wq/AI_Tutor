@@ -229,13 +229,30 @@ const App = () => {
     }
   };
 
+  const getDisplayName = (item, fallback = '') => {
+    if (!item) return fallback;
+    if (typeof item === 'string' || typeof item === 'number') return String(item);
+    return item.name || item.title || item.label || item.chapter || fallback;
+  };
+
   const openChapter = (chapter) => {
+    const chapterName = getDisplayName(chapter, 'Chapter');
+    const subjectName = getDisplayName(selectedSubject, 'Subject');
+
     setSelectedChapter(chapter);
     setSelectedDbChapter(chapter.id);
     setSubView('chapter');
     setRecentChapters(prev => {
       const filtered = prev.filter(r => r.chapterId !== chapter.id);
-      return [{ chapter: chapter.name, subject: selectedSubject?.name, lastAccessed: new Date(), chapterId: chapter.id }, ...filtered].slice(0, 10);
+      return [
+        {
+          chapter: chapterName,
+          subject: subjectName,
+          lastAccessed: new Date(),
+          chapterId: chapter.id,
+        },
+        ...filtered,
+      ].slice(0, 10);
     });
   };
 
@@ -287,7 +304,12 @@ const App = () => {
 
   const getContext = () => {
     if (!selectedBoard) return null;
-    return { board: selectedBoard?.name, grade: selectedGrade?.name, subject: selectedSubject?.name, chapter: selectedChapter?.name };
+    return {
+      board: getDisplayName(selectedBoard),
+      grade: getDisplayName(selectedGrade),
+      subject: getDisplayName(selectedSubject),
+      chapter: getDisplayName(selectedChapter),
+    };
   };
 
   const getParentEntryLink = () => {

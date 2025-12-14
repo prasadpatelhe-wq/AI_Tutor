@@ -329,6 +329,15 @@ const ChapterPageView = ({
     setMounted(true);
   }, []);
 
+  const getLabel = (value, fallback) => {
+    if (!value) return fallback;
+    if (typeof value === 'string' || typeof value === 'number') return String(value);
+    return value.name || value.title || value.label || value.chapter || fallback;
+  };
+
+  const chapterLabel = getLabel(chapter, 'Chapter');
+  const subjectLabel = getLabel(subject, 'Subject');
+
   const completedModes = [textModeContent, studyModeContent, practiceModeContent]
     .filter(Boolean).length;
 
@@ -371,8 +380,8 @@ const ChapterPageView = ({
     }}>
       {/* Header */}
       <ChapterHeader
-        chapter={chapter?.name || chapter}
-        subject={subject?.name || subject}
+        chapter={chapterLabel}
+        subject={subjectLabel}
         onBack={onBack}
         onMenuClick={onMenuClick}
       />

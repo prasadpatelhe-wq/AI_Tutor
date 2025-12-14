@@ -289,12 +289,26 @@ const LearnView = ({
     else setCurrentStep(3);
   }, [selectedBoard, selectedGrade, selectedSubject]);
 
+  const getOptionLabel = (opt) => {
+    if (!opt) return '';
+    if (typeof opt === 'string' || typeof opt === 'number') return String(opt);
+    return opt.name || opt.title || opt.label || opt.chapter || opt.subject || '';
+  };
+
+  const getOptionSublabel = (opt) => {
+    if (!opt || typeof opt === 'string' || typeof opt === 'number') return '';
+    if (opt.description) return opt.description;
+    if (opt.summary) return opt.summary;
+    if (typeof opt.chapters_count !== 'undefined') return `${opt.chapters_count} chapters`;
+    return '';
+  };
+
   // Get selections object for stepper
   const selections = {
-    board: selectedBoard?.name || selectedBoard,
-    grade: selectedGrade?.name || selectedGrade,
-    subject: selectedSubject?.name || selectedSubject,
-    chapter: selectedChapter?.name || selectedChapter,
+    board: getOptionLabel(selectedBoard),
+    grade: getOptionLabel(selectedGrade),
+    subject: getOptionLabel(selectedSubject),
+    chapter: getOptionLabel(selectedChapter),
   };
 
   // Handle step navigation
@@ -316,9 +330,7 @@ const LearnView = ({
   const filterOptions = (options) => {
     if (!searchQuery) return options;
     const query = searchQuery.toLowerCase();
-    return options.filter(opt =>
-      (opt.name || opt.label || opt).toLowerCase().includes(query)
-    );
+    return options.filter(opt => getOptionLabel(opt).toLowerCase().includes(query));
   };
 
   // Get current step data
@@ -412,10 +424,8 @@ const LearnView = ({
           />
         ) : (
           options.map((option, index) => {
-            const name = option.name || option.label || option;
-            const sublabel = option.description || option.chapters_count
-              ? `${option.chapters_count} chapters`
-              : null;
+            const name = getOptionLabel(option) || 'Untitled';
+            const sublabel = getOptionSublabel(option);
             const isSelected =
               (currentStep === 0 && selectedBoard?.id === option.id) ||
               (currentStep === 1 && selectedGrade?.id === option.id) ||

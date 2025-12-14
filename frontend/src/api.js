@@ -10,6 +10,58 @@ export const api = axios.create({
   },
 });
 
+// Normalizes backend error payloads (e.g., FastAPI/Pydantic) into a user-friendly string
+const formatErrorDetail = (detail) => {
+  if (!detail) return '';
+
+  // String details can be returned as-is
+  if (typeof detail === 'string') return detail;
+
+  // Arrays may contain strings or objects with msg/loc
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => formatErrorDetail(item))
+      .filter(Boolean)
+      .join('; ');
+  }
+
+  // Objects from FastAPI validation errors usually have msg + loc
+  if (typeof detail === 'object') {
+    const msg = detail.msg || detail.message || detail.error;
+    const loc = detail.loc
+      ? Array.isArray(detail.loc)
+        ? detail.loc.join('.')
+        : detail.loc
+      : '';
+
+    if (msg && loc) return `${loc}: ${msg}`;
+    if (msg) return msg;
+
+    try {
+      return JSON.stringify(detail);
+    } catch (err) {
+      console.error('Error stringifying detail', err);
+      return '';
+    }
+  }
+
+  // Fallback for numbers/booleans/etc.
+  try {
+    return String(detail);
+  } catch {
+    return '';
+  }
+};
+
+const getErrorMessage = (error, fallback) => {
+  const detail = error?.response?.data?.detail;
+  const parsed = formatErrorDetail(detail);
+
+  if (parsed) return parsed;
+  if (error?.message) return error.message;
+  return fallback || 'Something went wrong';
+};
+
 // API Functions
 export const verifyParentPin = async (pin, setLoading, setGameState, setParentStatus) => {
   setLoading(prev => ({ ...prev, parent: true }));
@@ -336,7 +388,7 @@ export const registerStudent = async (studentData) => {
     return { success: true, data: response.data };
   } catch (error) {
     console.error('Registration error:', error);
-    return { success: false, message: error.response?.data?.detail || 'Registration failed' };
+    return { success: false, message: getErrorMessage(error, 'Registration failed') };
   }
 };
 
@@ -346,7 +398,7 @@ export const loginStudent = async (credentials) => {
     return { success: true, data: response.data };
   } catch (error) {
     console.error('Login error:', error);
-    return { success: false, message: error.response?.data?.detail || 'Login failed' };
+    return { success: false, message: getErrorMessage(error, 'Login failed') };
   }
 };
 
@@ -356,7 +408,7 @@ export const requestOtp = async ({ channel, identifier, purpose }) => {
     return { success: true, data: response.data };
   } catch (error) {
     console.error('Request OTP error:', error);
-    return { success: false, message: error.response?.data?.detail || 'Failed to send OTP' };
+    return { success: false, message: getErrorMessage(error, 'Failed to send OTP') };
   }
 };
 
@@ -366,7 +418,7 @@ export const verifyOtp = async ({ channel, identifier, purpose, otp }) => {
     return { success: true, data: response.data };
   } catch (error) {
     console.error('Verify OTP error:', error);
-    return { success: false, message: error.response?.data?.detail || 'Invalid OTP' };
+    return { success: false, message: getErrorMessage(error, 'Invalid OTP') };
   }
 };
 
@@ -376,7 +428,7 @@ export const loginStudentOtp = async ({ phone, otp }) => {
     return { success: true, data: response.data };
   } catch (error) {
     console.error('OTP login error:', error);
-    return { success: false, message: error.response?.data?.detail || 'OTP login failed' };
+    return { success: false, message: getErrorMessage(error, 'OTP login failed') };
   }
 };
 
@@ -386,7 +438,7 @@ export const registerStudentOtp = async (payload) => {
     return { success: true, data: response.data };
   } catch (error) {
     console.error('OTP registration error:', error);
-    return { success: false, message: error.response?.data?.detail || 'Registration failed' };
+    return { success: false, message: getErrorMessage(error, 'Registration failed') };
   }
 };
 
@@ -396,7 +448,7 @@ export const requestPasswordReset = async ({ email }) => {
     return { success: true, data: response.data };
   } catch (error) {
     console.error('Password reset request error:', error);
-    return { success: false, message: error.response?.data?.detail || 'Failed to request password reset' };
+    return { success: false, message: getErrorMessage(error, 'Failed to request password reset') };
   }
 };
 
@@ -410,7 +462,7 @@ export const confirmPasswordReset = async ({ email, otp, newPassword }) => {
     return { success: true, data: response.data };
   } catch (error) {
     console.error('Password reset confirm error:', error);
-    return { success: false, message: error.response?.data?.detail || 'Failed to reset password' };
+    return { success: false, message: getErrorMessage(error, 'Failed to reset password') };
   }
 };
 
@@ -420,6 +472,6 @@ export const getStudent = async (studentId) => {
     return { success: true, data: response.data };
   } catch (error) {
     console.error('Get student error:', error);
-    return { success: false, message: error.response?.data?.detail || 'Failed to load student' };
+    return { success: false, message: getErrorMessage(error, 'Failed to load student') };
   }
 };
