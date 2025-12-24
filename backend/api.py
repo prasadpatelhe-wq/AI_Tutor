@@ -67,6 +67,7 @@ from backend.routes.chapters_router import router as chapters_router
 from backend.routes.meta_router import router as meta_router
 from backend.routes.students_router import router as students_router
 from backend.routes.subchapters_router import router as subchapters_router
+from backend.routes.chat_router import router as chat_router
 
 # Services
 from backend.services.flashcard_service import save_flashcards_from_quiz
@@ -223,6 +224,7 @@ app.include_router(subjects_router)
 app.include_router(meta_router)
 app.include_router(students_router)
 app.include_router(subchapters_router)
+app.include_router(chat_router)
 
 
 # === AI Tutor Initialization ===

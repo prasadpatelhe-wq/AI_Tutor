@@ -11,71 +11,109 @@
  */
 
 // ============================================
-// COLOR TOKENS
+// COLOR TOKENS - Vibrant Modern Learning Design
 // ============================================
 export const colors = {
-  // Primary palette
+  // Primary - Bright Blue (main actions, highlights)
   primary: {
-    50: '#e6f2f2',
-    100: '#b3d9d9',
-    200: '#80c0c0',
-    300: '#4da6a6',
-    400: '#268c8c',
-    500: '#1a6b6b', // Main primary
-    600: '#155a5a',
-    700: '#104848',
-    800: '#0b3636',
-    900: '#062424',
+    50: '#e0f2fe',
+    100: '#b3e0fe',
+    200: '#7fcffd',
+    300: '#4bbdfc',
+    400: '#1CB0F6', // Main primary - Bright blue
+    500: '#1CB0F6',
+    600: '#189ad4',
+    700: '#1484b2',
+    800: '#106e90',
+    900: '#0c586e',
   },
 
-  // Accent - Electric Lime (CTAs, highlights)
+  // Accent - Bright Yellow (coins, highlights, CTAs)
   accent: {
-    50: '#f8fde6',
-    100: '#eefab3',
-    200: '#e4f780',
-    300: '#daf44d',
-    400: '#c4f042', // Main accent
-    500: '#a8d435',
-    600: '#8cb82a',
-    700: '#709c1f',
-    800: '#548014',
-    900: '#386409',
+    50: '#fff9e6',
+    100: '#fff3b3',
+    200: '#ffed80',
+    300: '#ffe74d',
+    400: '#FFC800', // Main accent - Bright yellow
+    500: '#FFC800',
+    600: '#e6b400',
+    700: '#cca000',
+    800: '#b38c00',
+    900: '#997800',
   },
 
-  // Secondary - Warm Coral (alerts, emphasis)
+  // Secondary - Success Green (progress, achievements)
   secondary: {
-    50: '#fff0ee',
-    100: '#ffd4cf',
-    200: '#ffb8b0',
-    300: '#ff9c91',
-    400: '#ff8072',
-    500: '#ff6b5b', // Main secondary
-    600: '#e55a4a',
-    700: '#cc4939',
-    800: '#b23828',
-    900: '#992717',
+    50: '#e6f9ed',
+    100: '#b3edc7',
+    200: '#80e1a1',
+    300: '#4dd57b',
+    400: '#58CC02', // Main secondary - Success green
+    500: '#58CC02',
+    600: '#4db802',
+    700: '#43a402',
+    800: '#399001',
+    900: '#2f7c01',
   },
 
-  // Neutrals - Warm grays
+  // Orange - Streak/Energy (streaks, motivation)
+  orange: {
+    50: '#fff4e6',
+    100: '#ffddb3',
+    200: '#ffc680',
+    300: '#ffaf4d',
+    400: '#FF9600', // Main orange
+    500: '#FF9600',
+    600: '#e68700',
+    700: '#cc7800',
+    800: '#b36900',
+    900: '#995a00',
+  },
+
+  // Purple - Variety (videos, special features)
+  purple: {
+    50: '#f3edf9',
+    100: '#d9c7ed',
+    200: '#bfa1e1',
+    300: '#a57bd5',
+    400: '#8549BA', // Main purple
+    500: '#8549BA',
+    600: '#7741a7',
+    700: '#693994',
+    800: '#5b3181',
+    900: '#4d296e',
+  },
+
+  // Neutrals - Clean grays
   neutral: {
     0: '#ffffff',
-    50: '#faf8f5',   // Background cream
-    100: '#f5f2ed',
-    200: '#e8e4dd',
-    300: '#d4cfc5',
-    400: '#b8b2a6',
-    500: '#9c9587',
-    600: '#807868',
-    700: '#645c4a',
-    800: '#48412c',
+    50: '#F7F7F7',   // Light background
+    100: '#F0F0F0',
+    200: '#E5E5E5',
+    300: '#D4D4D4',
+    400: '#A3A3A3',
+    500: '#737373',
+    600: '#525252',
+    700: '#404040',
+    800: '#262626',
     900: '#1a1a1a',  // Text black
   },
 
+  // Dark mode colors
+  dark: {
+    bg: '#131F24',
+    card: 'rgba(255, 255, 255, 0.06)',
+    cardHover: 'rgba(255, 255, 255, 0.1)',
+    border: 'rgba(255, 255, 255, 0.12)',
+    text: '#ffffff',
+    textMuted: 'rgba(255, 255, 255, 0.6)',
+  },
+
   // Semantic colors
-  success: '#22c55e',
-  warning: '#f59e0b',
-  error: '#ef4444',
-  info: '#3b82f6',
+  success: '#58CC02',
+  warning: '#FF9600',
+  error: '#FF4B4B',
+  info: '#1CB0F6',
 
   // Special surfaces
   glass: 'rgba(255, 255, 255, 0.7)',
@@ -86,11 +124,11 @@ export const colors = {
 // TYPOGRAPHY
 // ============================================
 export const typography = {
-  // Font families - distinctive choices
+  // Font families - modern, clean choices
   fontFamily: {
-    display: '"Plus Jakarta Sans", "SF Pro Display", system-ui, sans-serif',
-    body: '"DM Sans", "SF Pro Text", system-ui, sans-serif',
-    mono: '"JetBrains Mono", "SF Mono", monospace',
+    display: '"Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, system-ui, sans-serif',
+    body: '"Inter", "SF Pro Text", -apple-system, BlinkMacSystemFont, system-ui, sans-serif',
+    mono: '"JetBrains Mono", "SF Mono", "Consolas", monospace',
   },
 
   // Font sizes with line heights
@@ -510,7 +548,7 @@ export const generateCSSVariables = () => `
 // ============================================
 // GOOGLE FONTS IMPORT
 // ============================================
-export const googleFontsUrl = 'https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap';
+export const googleFontsUrl = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap';
 
 export default {
   colors,

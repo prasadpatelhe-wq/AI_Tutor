@@ -11,18 +11,12 @@ from backend.models.subject import Subject
 from backend.models.chapter import Chapter
 from backend.models.students import Student
 from backend.models.student_progress import StudentProgress
-from backend.database import SessionLocal
 from datetime import datetime
 import json
 
 
-def get_db():
-    """Utility function to get a new DB session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# NOTE: Use backend.database.get_db for FastAPI Depends()
+# or backend.database.get_db_context() for context manager usage
 
 
 # -----------------------------------------------------------

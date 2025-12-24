@@ -3,10 +3,17 @@ StudentProgress model for spaced repetition tracking.
 Includes unique constraint on (student_id, flashcard_id) to prevent duplicates.
 """
 
+from datetime import datetime, timedelta
+
 from backend.database import Base
 from sqlalchemy import Column, Integer, String, ForeignKey, DateTime, Index, UniqueConstraint
 from sqlalchemy.orm import relationship
 import uuid
+
+
+def _default_next_review():
+    """Default next review is 1 day from now."""
+    return datetime.utcnow() + timedelta(days=1)
 
 
 class StudentProgress(Base):
@@ -28,11 +35,11 @@ class StudentProgress(Base):
         index=True
     )
 
-    # Progress tracking
-    status = Column(String(50), default="new")  # "new" | "reviewing" | "mastered"
+    # Progress tracking with proper defaults
+    status = Column(String(50), default="new", index=True)  # "new" | "reviewing" | "mastered"
     attempts = Column(Integer, default=0, nullable=False)
-    last_reviewed = Column(DateTime)
-    next_review = Column(DateTime, index=True)  # Index for due flashcards query
+    last_reviewed = Column(DateTime, default=datetime.utcnow, nullable=True)
+    next_review = Column(DateTime, default=_default_next_review, index=True)
 
     # Relationships
     student = relationship("Student", back_populates="progress_records")
@@ -43,4 +50,5 @@ class StudentProgress(Base):
         # Ensure one progress record per student-flashcard pair
         UniqueConstraint('student_id', 'flashcard_id', name='uq_student_flashcard'),
         Index('ix_progress_student_next_review', 'student_id', 'next_review'),
+        Index('ix_progress_status', 'status'),
     )

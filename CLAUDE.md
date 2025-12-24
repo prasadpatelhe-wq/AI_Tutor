@@ -35,6 +35,11 @@ Create a `.env` file in the project root:
 EURIAI_API_KEY=your_key_here
 PARENT_PIN=1234
 FAISS_ALLOW_DANGEROUS_DESERIALIZATION=false
+
+# Optional: LangSmith tracing (for observability)
+LANGCHAIN_API_KEY=your_langsmith_key
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_PROJECT=ai-tutor
 ```
 
 ## Architecture
@@ -51,7 +56,13 @@ backend/
 └── src/tutor/              # AI Tutor core
     ├── interface.py        # Main AI_Tutor class with quiz generation
     ├── framework.py        # EuriaiModelFramework - intelligent model selection
-    └── registry.py         # Agent configurations for different subjects
+    ├── registry.py         # Agent configurations for different subjects
+    ├── langchain_wrapper.py # LangChain-compatible ChatEuriai wrapper
+    ├── memory_service.py   # Conversation memory per student session
+    ├── rag_pipeline.py     # Enhanced RAG with query expansion
+    ├── langgraph_tutor.py  # LangGraph workflow for multi-step tutoring
+    ├── enhanced_interface.py # Enhanced AI_Tutor with LangChain integration
+    └── tracing.py          # LangSmith observability support
 ```
 
 ### Frontend Structure
@@ -105,6 +116,14 @@ Key routes (all prefixed with http://127.0.0.1:8000):
 - `POST /calculate_quiz_score` - Score and award coins
 - `GET /flashcards/get_flashcards_by_student` - Spaced repetition cards
 - `POST /flashcards/update_progress` - Update card mastery
+
+Enhanced Chat (LangChain-powered):
+- `POST /chat/` - Chat with memory and RAG support
+- `POST /chat/simple` - Simple stateless chat (backward compatible)
+- `POST /chat/query-curriculum` - RAG-powered curriculum queries
+- `GET /chat/history/{student_id}/{subject}` - Get conversation history
+- `DELETE /chat/history/{student_id}` - Clear conversation history
+- `GET /chat/health` - Enhanced chat system health check
 
 Interactive docs at: http://127.0.0.1:8000/docs
 
