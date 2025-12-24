@@ -115,9 +115,26 @@ export const colors = {
   error: '#FF4B4B',
   info: '#1CB0F6',
 
+  // Void Theme (Reference Style)
+  theme: {
+    bg: '#0F1612',         // Deepest Green/Black
+    sidebar: '#0C120F',    // Slightly darker for sidebar
+    card: '#151F19',       // Deep Green Card
+    cardHover: '#1E2C24',  // Lighter Green Hover
+    primary: '#00FF84',    // Neon Green
+    secondary: '#2B4EFF',  // Deep Blue (Quote Card)
+    accent: '#FFC800',     // Gold/Yellow
+    text: '#FFFFFF',       // White
+    textMuted: '#8A9F96',  // Muted Green-Grey
+    border: 'rgba(255, 255, 255, 0.08)',
+    success: '#00FF84',
+    warning: '#FFC800',
+    error: '#FF4B4B',
+  },
+
   // Special surfaces
-  glass: 'rgba(255, 255, 255, 0.7)',
-  overlay: 'rgba(26, 26, 26, 0.5)',
+  glass: 'rgba(21, 31, 25, 0.7)',
+  overlay: 'rgba(15, 22, 18, 0.8)',
 };
 
 // ============================================
