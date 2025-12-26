@@ -1,10 +1,91 @@
-import React from 'react';
-import { colors, typography, spacing, borderRadius, transitions } from '../design/designSystem';
+import React, { useState, useEffect } from 'react';
+import { colors, typography, spacing, borderRadius, transitions, zIndex } from '../design/designSystem';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
-const SidebarItem = ({ icon: Icon, label, active, onClick, badge }) => {
+// Hamburger Menu Icon
+const HamburgerIcon = ({ isOpen, onClick }) => (
+    <button
+        onClick={onClick}
+        aria-label={isOpen ? 'Close menu' : 'Open menu'}
+        style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '44px',
+            height: '44px',
+            padding: spacing[2],
+            backgroundColor: colors.theme.card,
+            border: `1px solid ${colors.theme.border}`,
+            borderRadius: borderRadius.lg,
+            cursor: 'pointer',
+            position: 'fixed',
+            top: spacing[4],
+            left: spacing[4],
+            zIndex: zIndex.sticky + 1,
+            transition: `all ${transitions.duration.fast} ${transitions.easing.out}`,
+        }}
+    >
+        <span style={{
+            display: 'block',
+            width: '20px',
+            height: '2px',
+            backgroundColor: colors.theme.text,
+            borderRadius: '2px',
+            transition: `all ${transitions.duration.fast} ${transitions.easing.out}`,
+            transform: isOpen ? 'rotate(45deg) translateY(6px)' : 'none',
+        }} />
+        <span style={{
+            display: 'block',
+            width: '20px',
+            height: '2px',
+            backgroundColor: colors.theme.text,
+            borderRadius: '2px',
+            marginTop: '5px',
+            transition: `all ${transitions.duration.fast} ${transitions.easing.out}`,
+            opacity: isOpen ? 0 : 1,
+        }} />
+        <span style={{
+            display: 'block',
+            width: '20px',
+            height: '2px',
+            backgroundColor: colors.theme.text,
+            borderRadius: '2px',
+            marginTop: '5px',
+            transition: `all ${transitions.duration.fast} ${transitions.easing.out}`,
+            transform: isOpen ? 'rotate(-45deg) translateY(-6px)' : 'none',
+        }} />
+    </button>
+);
+
+// Overlay for mobile
+const Overlay = ({ isOpen, onClick }) => (
+    <div
+        onClick={onClick}
+        style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: colors.overlay,
+            zIndex: zIndex.modal - 1,
+            opacity: isOpen ? 1 : 0,
+            visibility: isOpen ? 'visible' : 'hidden',
+            transition: `opacity ${transitions.duration.normal} ${transitions.easing.out}, visibility ${transitions.duration.normal}`,
+        }}
+    />
+);
+
+const SidebarItem = ({ icon: Icon, label, active, onClick, badge, onItemClick }) => {
+    const handleClick = () => {
+        onClick();
+        if (onItemClick) onItemClick();
+    };
+
     return (
         <button
-            onClick={onClick}
+            onClick={handleClick}
             style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -124,133 +205,196 @@ const Icons = {
 };
 
 const Sidebar = ({ activeTab, onTabChange, student }) => {
+    const isMobile = useIsMobile();
+    const [isOpen, setIsOpen] = useState(false);
+
+    // Close sidebar when switching to desktop
+    useEffect(() => {
+        if (!isMobile) {
+            setIsOpen(false);
+        }
+    }, [isMobile]);
+
+    // Close sidebar on navigation (mobile only)
+    const handleItemClick = () => {
+        if (isMobile) {
+            setIsOpen(false);
+        }
+    };
+
+    // Prevent body scroll when sidebar is open on mobile
+    useEffect(() => {
+        if (isMobile && isOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isMobile, isOpen]);
+
+    const sidebarStyle = isMobile ? {
+        width: '280px',
+        height: '100vh',
+        backgroundColor: colors.theme.sidebar,
+        borderRight: `1px solid ${colors.theme.border}`,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: spacing[6],
+        position: 'fixed',
+        left: 0,
+        top: 0,
+        zIndex: zIndex.modal,
+        transform: isOpen ? 'translateX(0)' : 'translateX(-100%)',
+        transition: `transform ${transitions.duration.normal} ${transitions.easing.out}`,
+        overflowY: 'auto',
+    } : {
+        width: '260px',
+        height: '100vh',
+        backgroundColor: colors.theme.sidebar,
+        borderRight: `1px solid ${colors.theme.border}`,
+        display: 'flex',
+        flexDirection: 'column',
+        padding: spacing[6],
+        position: 'fixed',
+        left: 0,
+        top: 0,
+    };
+
     return (
-        <div style={{
-            width: '260px',
-            height: '100vh',
-            backgroundColor: colors.theme.sidebar,
-            borderRight: `1px solid ${colors.theme.border}`,
-            display: 'flex',
-            flexDirection: 'column',
-            padding: spacing[6],
-            position: 'fixed',
-            left: 0,
-            top: 0,
-        }}>
-            {/* Brand */}
-            <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: spacing[3],
-                marginBottom: spacing[10],
-                paddingLeft: spacing[2]
-            }}>
-                <Icons.Logo />
-                <div>
-                    <h1 style={{
-                        fontFamily: typography.fontFamily.display,
-                        fontSize: typography.fontSize.lg[0],
-                        fontWeight: typography.fontWeight.bold,
-                        color: colors.theme.text,
-                        margin: 0,
-                        lineHeight: 1
-                    }}>EduLearn</h1>
-                    <span style={{
-                        fontFamily: typography.fontFamily.body,
-                        fontSize: '11px',
-                        color: colors.theme.textMuted,
-                        letterSpacing: '0.05em',
-                        textTransform: 'uppercase'
-                    }}>Student Portal</span>
-                </div>
-            </div>
+        <>
+            {/* Mobile Hamburger Button */}
+            {isMobile && (
+                <HamburgerIcon isOpen={isOpen} onClick={() => setIsOpen(!isOpen)} />
+            )}
 
-            {/* Main Navigation */}
-            <nav style={{ display: 'flex', flexDirection: 'column', gap: spacing[2], flex: 1 }}>
-                <SidebarItem
-                    icon={Icons.Dashboard}
-                    label="Dashboard"
-                    active={activeTab === 'home'}
-                    onClick={() => onTabChange('home')}
-                />
-                <SidebarItem
-                    icon={Icons.Courses}
-                    label="My Courses"
-                    active={activeTab === 'learn'}
-                    onClick={() => onTabChange('learn')}
-                />
-                <SidebarItem
-                    icon={Icons.Assignments}
-                    label="Assignments"
-                    active={activeTab === 'review'}
-                    onClick={() => onTabChange('review')}
-                    badge={2}
-                />
-                <SidebarItem
-                    icon={Icons.Leaderboard}
-                    label="Leaderboard"
-                    active={activeTab === 'leaderboard'}
-                    onClick={() => onTabChange('leaderboard')}
-                />
-                <SidebarItem
-                    icon={Icons.Community}
-                    label="Community"
-                    active={activeTab === 'community'}
-                    onClick={() => onTabChange('community')}
-                />
-            </nav>
+            {/* Overlay for mobile */}
+            {isMobile && <Overlay isOpen={isOpen} onClick={() => setIsOpen(false)} />}
 
-            {/* Bottom Section */}
-            <div style={{ borderTop: `1px solid ${colors.theme.border}`, paddingTop: spacing[6], display: 'flex', flexDirection: 'column', gap: spacing[2] }}>
-                <SidebarItem
-                    icon={Icons.Settings}
-                    label="Settings"
-                    active={activeTab === 'settings'}
-                    onClick={() => onTabChange('settings')}
-                />
-
-                {/* Mini Profile */}
+            {/* Sidebar */}
+            <div style={sidebarStyle}>
+                {/* Brand */}
                 <div style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: spacing[3],
-                    padding: spacing[3],
-                    marginTop: spacing[2],
-                    borderRadius: borderRadius.lg,
-                    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                    cursor: 'pointer'
-                }} onClick={() => onTabChange('profile')}>
-                    <div style={{
-                        width: '36px',
-                        height: '36px',
-                        borderRadius: borderRadius.full,
-                        backgroundColor: colors.theme.primary,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '18px'
-                    }}>
-                        👤
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{
+                    marginBottom: spacing[10],
+                    paddingLeft: spacing[2]
+                }}>
+                    <Icons.Logo />
+                    <div>
+                        <h1 style={{
                             fontFamily: typography.fontFamily.display,
-                            fontSize: typography.fontSize.sm[0],
+                            fontSize: typography.fontSize.lg[0],
                             fontWeight: typography.fontWeight.bold,
                             color: colors.theme.text,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                        }}>{student?.name || 'Guest User'}</div>
-                        <div style={{
+                            margin: 0,
+                            lineHeight: 1
+                        }}>AI Tutor</h1>
+                        <span style={{
                             fontFamily: typography.fontFamily.body,
                             fontSize: '11px',
                             color: colors.theme.textMuted,
-                        }}>{student?.grade_band || 'Grade 10'}</div>
+                            letterSpacing: '0.05em',
+                            textTransform: 'uppercase'
+                        }}>Student Portal</span>
+                    </div>
+                </div>
+
+                {/* Main Navigation */}
+                <nav style={{ display: 'flex', flexDirection: 'column', gap: spacing[2], flex: 1 }}>
+                    <SidebarItem
+                        icon={Icons.Dashboard}
+                        label="Dashboard"
+                        active={activeTab === 'home'}
+                        onClick={() => onTabChange('home')}
+                        onItemClick={handleItemClick}
+                    />
+                    <SidebarItem
+                        icon={Icons.Courses}
+                        label="My Courses"
+                        active={activeTab === 'learn'}
+                        onClick={() => onTabChange('learn')}
+                        onItemClick={handleItemClick}
+                    />
+                    <SidebarItem
+                        icon={Icons.Assignments}
+                        label="Assignments"
+                        active={activeTab === 'review'}
+                        onClick={() => onTabChange('review')}
+                        badge={2}
+                        onItemClick={handleItemClick}
+                    />
+                    <SidebarItem
+                        icon={Icons.Leaderboard}
+                        label="Leaderboard"
+                        active={activeTab === 'leaderboard'}
+                        onClick={() => onTabChange('leaderboard')}
+                        onItemClick={handleItemClick}
+                    />
+                    <SidebarItem
+                        icon={Icons.Community}
+                        label="Community"
+                        active={activeTab === 'community'}
+                        onClick={() => onTabChange('community')}
+                        onItemClick={handleItemClick}
+                    />
+                </nav>
+
+                {/* Bottom Section */}
+                <div style={{ borderTop: `1px solid ${colors.theme.border}`, paddingTop: spacing[6], display: 'flex', flexDirection: 'column', gap: spacing[2] }}>
+                    <SidebarItem
+                        icon={Icons.Settings}
+                        label="Settings"
+                        active={activeTab === 'settings'}
+                        onClick={() => onTabChange('settings')}
+                        onItemClick={handleItemClick}
+                    />
+
+                    {/* Mini Profile */}
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: spacing[3],
+                        padding: spacing[3],
+                        marginTop: spacing[2],
+                        borderRadius: borderRadius.lg,
+                        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                        cursor: 'pointer'
+                    }} onClick={() => { onTabChange('profile'); handleItemClick(); }}>
+                        <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: borderRadius.full,
+                            backgroundColor: colors.theme.primary,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '18px'
+                        }}>
+                            👤
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{
+                                fontFamily: typography.fontFamily.display,
+                                fontSize: typography.fontSize.sm[0],
+                                fontWeight: typography.fontWeight.bold,
+                                color: colors.theme.text,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis'
+                            }}>{student?.name || 'Guest User'}</div>
+                            <div style={{
+                                fontFamily: typography.fontFamily.body,
+                                fontSize: '11px',
+                                color: colors.theme.textMuted,
+                            }}>{student?.grade_band || 'Grade 10'}</div>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
+        </>
     );
 };
 

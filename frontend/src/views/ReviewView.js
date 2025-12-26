@@ -11,6 +11,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { colors, typography, spacing, borderRadius, shadows, transitions } from '../design/designSystem';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 // ============================================
 // ICONS
@@ -235,8 +236,12 @@ const Flashcard = ({ card, isFlipped, onFlip }) => (
 );
 
 // Grade Buttons
-const GradeButtons = ({ onGrade, disabled }) => (
-  <div style={styles.gradeButtons}>
+const GradeButtons = ({ onGrade, disabled, isMobile }) => (
+  <div style={{
+    display: 'grid',
+    gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+    gap: spacing[2],
+  }}>
     {GRADE_BUTTONS.map((btn) => (
       <button
         key={btn.id}
@@ -380,6 +385,7 @@ const ReviewView = ({
   onDone,
   onStudyMore,
 }) => {
+  const isMobile = useIsMobile();
   const [isFlipped, setIsFlipped] = useState(false);
   const [mounted, setMounted] = useState(false);
 
@@ -446,6 +452,7 @@ const ReviewView = ({
           <GradeButtons
             onGrade={handleGrade}
             disabled={false}
+            isMobile={isMobile}
           />
         )}
       </div>

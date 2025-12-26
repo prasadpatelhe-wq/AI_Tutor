@@ -1,13 +1,15 @@
 /**
  * MainLayout - Core app layout with Sidebar
  * Features:
- * - Sidebar Navigation (Left)
+ * - Responsive design with mobile hamburger menu
+ * - Sidebar Navigation (Left on desktop, drawer on mobile)
  * - Deep Green Theme Background
  */
 
 import React, { useState, useEffect } from 'react';
-import { colors, transitions } from '../design/designSystem';
+import { colors, transitions, spacing } from '../design/designSystem';
 import Sidebar from '../components/Sidebar';
+import { useIsMobile } from '../hooks/useMediaQuery';
 
 // Main Layout Component
 const MainLayout = ({
@@ -17,6 +19,7 @@ const MainLayout = ({
   student, // Expecting student prop for sidebar profile
 }) => {
   const [mounted, setMounted] = useState(false);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     setMounted(true);
@@ -27,24 +30,37 @@ const MainLayout = ({
     };
   }, []);
 
+  // Responsive content styles
+  const contentStyle = {
+    flex: 1,
+    marginLeft: isMobile ? 0 : '260px', // No margin on mobile since sidebar is a drawer
+    padding: isMobile ? spacing[4] : spacing[10], // Less padding on mobile
+    paddingTop: isMobile ? spacing[16] : spacing[10], // Extra top padding on mobile for hamburger
+    transition: `opacity ${transitions.duration.normal} ${transitions.easing.out}, transform ${transitions.duration.normal} ${transitions.easing.out}`,
+    width: isMobile ? '100%' : 'calc(100% - 260px)',
+    opacity: mounted ? 1 : 0,
+    transform: mounted ? 'translateY(0)' : 'translateY(10px)',
+    boxSizing: 'border-box',
+  };
+
+  const contentInnerStyle = {
+    width: '100%',
+    maxWidth: isMobile ? '100%' : '1400px',
+    margin: '0 auto',
+  };
+
   return (
     <div style={styles.container}>
-      {/* Sidebar (Left) */}
+      {/* Sidebar (Left on desktop, drawer on mobile) */}
       <Sidebar
         activeTab={activeTab}
         onTabChange={onTabChange}
         student={student}
       />
 
-      {/* Main Content Area (Right) */}
-      <main
-        style={{
-          ...styles.content,
-          opacity: mounted ? 1 : 0,
-          transform: mounted ? 'translateY(0)' : 'translateY(10px)',
-        }}
-      >
-        {children}
+      {/* Main Content Area */}
+      <main style={contentStyle}>
+        <div style={contentInnerStyle}>{children}</div>
       </main>
     </div>
   );
@@ -58,16 +74,6 @@ const styles = {
     color: colors.theme.text,
     display: 'flex',
   },
-
-  content: {
-    flex: 1,
-    marginLeft: '260px', // Sidebar width
-    padding: '40px',
-    transition: `opacity ${transitions.duration.normal} ${transitions.easing.out}, transform ${transitions.duration.normal} ${transitions.easing.out}`,
-    maxWidth: '1200px', // Limit content width for readability
-    width: '100%',
-  },
 };
 
 export default MainLayout;
-

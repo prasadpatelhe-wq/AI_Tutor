@@ -279,7 +279,6 @@ const LearnView = ({
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
-  const [slideDirection, setSlideDirection] = useState('right');
 
   // Determine current step based on selections
   useEffect(() => {
@@ -313,7 +312,6 @@ const LearnView = ({
 
   // Handle step navigation
   const goToStep = (stepIndex) => {
-    setSlideDirection(stepIndex < currentStep ? 'left' : 'right');
     if (stepIndex === 0) {
       onBoardSelect?.(null);
       onGradeSelect?.(null);
@@ -786,10 +784,10 @@ const styles = {
     color: colors.neutral[500],
   },
 
-  // CTA
+  // CTA - Made responsive
   ctaWrapper: {
     position: 'fixed',
-    bottom: '100px',
+    bottom: '24px',
     left: spacing[4],
     right: spacing[4],
     maxWidth: '448px',
